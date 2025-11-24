@@ -22,17 +22,14 @@ import java.util.Map;
 
 import com.evolveum.polygon.connector.ldap.AbstractLdapConfiguration;
 import com.evolveum.polygon.connector.ldap.LdapConfiguration;
-import com.evolveum.polygon.connector.ldap.LdapUtil;
 import com.evolveum.polygon.connector.ldap.schema.AbstractSchemaTranslator;
 import org.apache.directory.api.ldap.model.entry.Entry;
 import org.apache.directory.api.ldap.model.exception.LdapInvalidDnException;
 import org.apache.directory.api.ldap.model.name.Dn;
-import org.apache.directory.api.ldap.model.url.LdapUrl;
 import org.apache.directory.ldap.client.api.LdapNetworkConnection;
 import org.identityconnectors.common.StringUtil;
 import org.identityconnectors.common.security.GuardedString;
 import org.identityconnectors.framework.common.exceptions.ConfigurationException;
-import org.identityconnectors.framework.common.exceptions.InvalidAttributeValueException;
 
 /**
  * @author semancik
@@ -124,7 +121,7 @@ public class ServerDefinition {
         this.authenticationType = configuration.getAuthenticationType();
         this.bindDn = configuration.getBindDn();
         this.bindPassword = configuration.getBindPassword();
-        this.timeout = configuration.getTimeout();
+        this.timeout = configuration.getGlobalTimeout();
         this.connectTimeout = configuration.getConnectTimeout();
         this.writeOperationTimeout = configuration.getWriteOperationTimeout();
         this.readOperationTimeout = configuration.getReadOperationTimeout();
@@ -162,7 +159,7 @@ public class ServerDefinition {
         def.authenticationType = getStringProp(props, "authenticationType", configuration.getAuthenticationType());
         def.bindDn = getStringProp(props, "bindDn", configuration.getBindDn());
         def.bindPassword = getGuardedStringProp(props, "bindPassword", configuration.getBindPassword());
-        def.timeout = getLongProp(props, "timeout", configuration.getTimeout());
+        def.timeout = getLongProp(props, "timeout", configuration.getGlobalTimeout());
         def.connectTimeout = getLongProp(props, "connectTimeout", configuration.getConnectTimeout(), def.timeout);
         def.writeOperationTimeout = getLongProp(props, "writeOperationTimeout", configuration.getWriteOperationTimeout(), def.timeout);
         def.readOperationTimeout = getLongProp(props, "readOperationTimeout", configuration.getReadOperationTimeout(), def.timeout);

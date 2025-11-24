@@ -129,7 +129,7 @@ public abstract class AbstractLdapConfiguration extends AbstractConfiguration {
      * Global timeout (in milliseconds).
      * This timeout will be used for all operations as default.
      */
-    private Long timeout;
+    private Long globalTimeout;
 
     private static final long DEFAULT_TIMEOUT = 10000;
 
@@ -681,13 +681,13 @@ public abstract class AbstractLdapConfiguration extends AbstractConfiguration {
     }
 
     @ConfigurationProperty(order = 10)
-    public Long getTimeout() {
-        return timeout;
+    public Long getGlobalTimeout() {
+        return globalTimeout;
     }
 
     @SuppressWarnings("unused")
-    public void setTimeout(Long timeout) {
-        this.timeout = timeout;
+    public void setGlobalTimeout(Long globalTimeout) {
+        this.globalTimeout = globalTimeout;
     }
 
     @ConfigurationProperty(order = 11)
@@ -1290,31 +1290,31 @@ public abstract class AbstractLdapConfiguration extends AbstractConfiguration {
         // We want to set a global timeout when connectTimeout is the only thing that is set.
         // That is what users will typically have before 3.3.
         if (connectTimeout != null
-                && timeout == null && writeOperationTimeout == null && readOperationTimeout == null
+                && globalTimeout == null && writeOperationTimeout == null && readOperationTimeout == null
                 && closeTimeout == null && sendTimeout == null) {
-            timeout = connectTimeout;
+            globalTimeout = connectTimeout;
         }
 
-        if (timeout == null) {
-            timeout = DEFAULT_TIMEOUT;
+        if (globalTimeout == null) {
+            globalTimeout = DEFAULT_TIMEOUT;
         }
 
-        connectTimeout = recomputeTimeoutValue(connectTimeout, timeout);
-        writeOperationTimeout = recomputeTimeoutValue(writeOperationTimeout, timeout);
-        readOperationTimeout = recomputeTimeoutValue(readOperationTimeout, timeout);
-        closeTimeout = recomputeTimeoutValue(closeTimeout, timeout);
-        sendTimeout = recomputeTimeoutValue(sendTimeout, timeout);
+        connectTimeout = recomputeTimeoutValue(connectTimeout, globalTimeout);
+        writeOperationTimeout = recomputeTimeoutValue(writeOperationTimeout, globalTimeout);
+        readOperationTimeout = recomputeTimeoutValue(readOperationTimeout, globalTimeout);
+        closeTimeout = recomputeTimeoutValue(closeTimeout, globalTimeout);
+        sendTimeout = recomputeTimeoutValue(sendTimeout, globalTimeout);
 
         if (checkAliveTimeout == null) {
-            checkAliveTimeout = timeout;
+            checkAliveTimeout = globalTimeout;
         }
     }
 
-    private Long recomputeTimeoutValue(Long timeout, Long globalTimeout) {
-        if (Objects.isNull(timeout)) {
+    private Long recomputeTimeoutValue(Long thisTimeout, Long globalTimeout) {
+        if (Objects.isNull(thisTimeout)) {
             return globalTimeout;
         }
-        return timeout;
+        return thisTimeout;
     }
 
     // TODO: equals, hashCode
