@@ -170,25 +170,25 @@ public class EDirectoryLdapConnector extends AbstractLdapConnector<EDirectoryLda
 					if (delta.getValuesToReplace() != null) {
 						throw new UnsupportedOperationException("Replace of group members is not supported");
 					}
-					updateGroupMemeberShip(dn, delta, options);
+					updateGroupMemberShip(dn, delta, options);
 				}
 				if (delta.is(getConfiguration().getGroupObjectGroupMemberAttribute())) {
 					// this is for group of groups (nested); "groupMember"
 					if (delta.getValuesToReplace() != null) {
 						throw new UnsupportedOperationException("Replace of group members is not supported");
 					}
-					updateGroupMemeberShip(dn, delta, options);
+					updateGroupMemberShip(dn, delta, options);
 				}
 			}
 		}
 	}
 	
-	private void updateGroupMemeberShip(Dn groupDn, AttributeDelta delta, OperationOptions options) {
-		addGroupMemeberShipModifications(groupDn, ModificationOperation.ADD_ATTRIBUTE, delta.getValuesToAdd(), options);
-		addGroupMemeberShipModifications(groupDn, ModificationOperation.REMOVE_ATTRIBUTE, delta.getValuesToRemove(), options);
+	private void updateGroupMemberShip(Dn groupDn, AttributeDelta delta, OperationOptions options) {
+		addGroupMemberShipModifications(groupDn, ModificationOperation.ADD_ATTRIBUTE, delta.getValuesToAdd(), options);
+		addGroupMemberShipModifications(groupDn, ModificationOperation.REMOVE_ATTRIBUTE, delta.getValuesToRemove(), options);
 	}
 
-	private void addGroupMemeberShipModifications(Dn groupDn, ModificationOperation modOp, List<Object> values, OperationOptions options) {
+	private void addGroupMemberShipModifications(Dn groupDn, ModificationOperation modOp, List<Object> values, OperationOptions options) {
 		if (values == null) {
 			return;
 		}
@@ -197,7 +197,7 @@ public class EDirectoryLdapConnector extends AbstractLdapConnector<EDirectoryLda
 			List<Modification> mods = new ArrayList<Modification>(1);
 			mods.add(new DefaultModification(modOp, EDirectoryConstants.ATTRIBUTE_GROUP_MEMBERSHIP_NAME, groupDn.toString()));
 			// No need to update securityEquals. eDirectory is doing that by itself
-			// (the question is why it cannot do also to the groupMemberhip?)
+			// (the question is why it cannot do also to the groupMembership?)
 			modify(memberDn, mods, options);
 		}
 	}
