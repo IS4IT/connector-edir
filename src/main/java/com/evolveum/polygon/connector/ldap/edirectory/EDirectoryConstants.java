@@ -30,8 +30,11 @@ public class EDirectoryConstants {
 	
 	public static final String OID_NOVELL_PREFIX = "2.16.840.1.113719";
 	public static final String OID_NOVELL_SYNTAX_PREFIX = OID_NOVELL_PREFIX+".1.1.5.1";
+
+	public static final String OID_NOVELL_SYNTAX_UNKNOWN = OID_NOVELL_SYNTAX_PREFIX+".0";
 	public static final String OID_NOVELL_SYNTAX_CASE_IGNORE_LIST = OID_NOVELL_SYNTAX_PREFIX+".6";
 	public static final String OID_NOVELL_SYNTAX_NETADDRESS = OID_NOVELL_SYNTAX_PREFIX+".12";
+	public static final String OID_NOVELL_SYNTAX_OCTET_LIST = OID_NOVELL_SYNTAX_PREFIX+".13";
 	public static final String OID_NOVELL_SYNTAX_TAGGED_STRING = OID_NOVELL_SYNTAX_PREFIX+".14";
 	public static final String OID_NOVELL_SYNTAX_TAGGED_NAME_AND_STRING = OID_NOVELL_SYNTAX_PREFIX+".15";
 	public static final String OID_NOVELL_SYNTAX_NDS_ACL = OID_NOVELL_SYNTAX_PREFIX+".17";
@@ -39,5 +42,8 @@ public class EDirectoryConstants {
 	public static final String OID_NOVELL_SYNTAX_COUNTER = OID_NOVELL_SYNTAX_PREFIX+".22";
 	public static final String OID_NOVELL_SYNTAX_TAGGED_NAME = OID_NOVELL_SYNTAX_PREFIX+".23";
 	public static final String OID_NOVELL_SYNTAX_TYPED_NAME = OID_NOVELL_SYNTAX_PREFIX+".25";
+	public static final String OID_NOVELL_SYNTAX_HOLDS = OID_NOVELL_SYNTAX_PREFIX+".26";
+	public static final String OID_NOVELL_SYNTAX_INTERVAL = OID_NOVELL_SYNTAX_PREFIX+".27";
+
 
 }

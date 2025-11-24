@@ -133,12 +133,17 @@ public class EDirectorySchemaTranslator extends AbstractSchemaTranslator<EDirect
 				|| EDirectoryConstants.OID_NOVELL_SYNTAX_COUNTER.equals(syntax.getOid())
 				|| EDirectoryConstants.OID_NOVELL_SYNTAX_TAGGED_NAME.equals(syntax.getOid())
 				|| EDirectoryConstants.OID_NOVELL_SYNTAX_TYPED_NAME.equals(syntax.getOid())
+				|| EDirectoryConstants.OID_NOVELL_SYNTAX_HOLDS.equals(syntax.getOid())
+				|| EDirectoryConstants.OID_NOVELL_SYNTAX_INTERVAL.equals(syntax.getOid())
+				|| EDirectoryConstants.OID_NOVELL_SYNTAX_UNKNOWN.equals(syntax.getOid())
 			)) {
 			return String.class;
 		} else if (syntax != null && EDirectoryConstants.OID_NOVELL_SYNTAX_NDS_TIMESTAMP.equals(syntax.getOid())) {
 			// String now. But we should convert this to date
 			return String.class;
-		} else if (syntax != null && EDirectoryConstants.OID_NOVELL_SYNTAX_NETADDRESS.equals(syntax.getOid())) {
+		} else if (syntax != null && (EDirectoryConstants.OID_NOVELL_SYNTAX_NETADDRESS.equals(syntax.getOid())
+				|| EDirectoryConstants.OID_NOVELL_SYNTAX_OCTET_LIST.equals(syntax.getOid())
+		)) {
 			return byte[].class;
 		}
 		return super.toConnIdType(syntax, icfAttributeName);
