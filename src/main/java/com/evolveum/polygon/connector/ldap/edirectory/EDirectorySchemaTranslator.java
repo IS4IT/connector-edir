@@ -128,14 +128,14 @@ public class EDirectorySchemaTranslator extends AbstractSchemaTranslator<EDirect
 	public Class<?> toConnIdType(LdapSyntax syntax, String icfAttributeName) {
 		if (syntax != null && (EDirectoryConstants.OID_NOVELL_SYNTAX_CASE_IGNORE_LIST.equals(syntax.getOid())
 				|| EDirectoryConstants.OID_NOVELL_SYNTAX_TAGGED_STRING.equals(syntax.getOid())
-				|| EDirectoryConstants.OID_NOVELL_SYNTAX_TAGGED_NAME_AND_STRING.equals(syntax.getOid())
+                || EDirectoryConstants.OID_NOVELL_SYNTAX_TAGGED_NAME_AND_STRING.equals(syntax.getOid())
 				|| EDirectoryConstants.OID_NOVELL_SYNTAX_NDS_ACL.equals(syntax.getOid())
 				|| EDirectoryConstants.OID_NOVELL_SYNTAX_COUNTER.equals(syntax.getOid())
 				|| EDirectoryConstants.OID_NOVELL_SYNTAX_TAGGED_NAME.equals(syntax.getOid())
 				|| EDirectoryConstants.OID_NOVELL_SYNTAX_TYPED_NAME.equals(syntax.getOid())
 				|| EDirectoryConstants.OID_NOVELL_SYNTAX_HOLDS.equals(syntax.getOid())
 				|| EDirectoryConstants.OID_NOVELL_SYNTAX_INTERVAL.equals(syntax.getOid())
-				|| EDirectoryConstants.OID_NOVELL_SYNTAX_UNKNOWN.equals(syntax.getOid())
+                || EDirectoryConstants.OID_NOVELL_SYNTAX_UNKNOWN.equals(syntax.getOid())
 			)) {
 			return String.class;
 		} else if (syntax != null && EDirectoryConstants.OID_NOVELL_SYNTAX_NDS_TIMESTAMP.equals(syntax.getOid())) {
@@ -143,6 +143,7 @@ public class EDirectorySchemaTranslator extends AbstractSchemaTranslator<EDirect
 			return String.class;
 		} else if (syntax != null && (EDirectoryConstants.OID_NOVELL_SYNTAX_NETADDRESS.equals(syntax.getOid())
 				|| EDirectoryConstants.OID_NOVELL_SYNTAX_OCTET_LIST.equals(syntax.getOid())
+                || EDirectoryConstants.OID_NOVELL_SYNTAX_REPLICA_POINTER.equals(syntax.getOid())
 		)) {
 			return byte[].class;
 		}
