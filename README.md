@@ -5,8 +5,8 @@ Restored EDirectoryLdapConnector, which was removed a few years ago. See https:/
 
 To use this connector to a MidPoint instance
 
-* build the project and export as `connector-ldap-2.3.jar`
-* copy `connector-ldap-2.3.jar` to `/opt/midpoint/var/icf-connectors` on the MidPoint server
-* restart the MidPoint Server
+* build the project in IntelliJ IDEA using the Maven "package" target
+* copy `target/connector-ldap-<version>.jar` to `/opt/midpoint/var/icf-connectors` on the MidPoint server and/or `/connid-connector-server/bundles/` on the ConnID Java Connector Server
+* restart the MidPoint Server and/or ConnID Java Connector Server
 
-Three new connectors should become available: v2.3 of LDAP, AD and Edirectory.
+Three new connector versions should become available for LDAP, AD and Edirectory.
