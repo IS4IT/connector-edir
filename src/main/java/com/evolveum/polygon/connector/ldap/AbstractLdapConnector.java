@@ -180,7 +180,7 @@ public abstract class AbstractLdapConnector<C extends AbstractLdapConfiguration>
     }
 
     protected void addServerSpecificConfigurationSuggestions(Map<String, SuggestedValues> suggestions) {
-        // TODO: server-speicifc suggestions, especially for OpenLDAP
+        // TODO: server-specific suggestions, especially for OpenLDAP
         // Used in subclasses
     }
 
