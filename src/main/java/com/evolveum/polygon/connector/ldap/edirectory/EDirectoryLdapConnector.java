@@ -16,13 +16,18 @@
 
 package com.evolveum.polygon.connector.ldap.edirectory;
 
-import java.util.ArrayList;
-import java.util.List;
-import java.util.Set;
-
+import com.evolveum.polygon.common.SchemaUtil;
+import com.evolveum.polygon.connector.ldap.AbstractLdapConfiguration;
+import com.evolveum.polygon.connector.ldap.AbstractLdapConnector;
+import com.evolveum.polygon.connector.ldap.ErrorHandler;
+import com.evolveum.polygon.connector.ldap.connection.ConnectionManager;
+import com.evolveum.polygon.connector.ldap.schema.AbstractSchemaTranslator;
+import com.evolveum.polygon.connector.ldap.schema.LdapFilterTranslator;
+import org.apache.directory.api.ldap.model.constants.SchemaConstants;
 import org.apache.directory.api.ldap.model.entry.DefaultModification;
 import org.apache.directory.api.ldap.model.entry.Modification;
 import org.apache.directory.api.ldap.model.entry.ModificationOperation;
+import org.apache.directory.api.ldap.model.entry.Value;
 import org.apache.directory.api.ldap.model.exception.LdapException;
 import org.apache.directory.api.ldap.model.exception.LdapInvalidAttributeValueException;
 import org.apache.directory.api.ldap.model.message.AddResponse;
@@ -31,20 +36,10 @@ import org.apache.directory.api.ldap.model.message.ResultCodeEnum;
 import org.apache.directory.api.ldap.model.name.Dn;
 import org.identityconnectors.common.logging.Log;
 import org.identityconnectors.framework.common.exceptions.InvalidAttributeValueException;
-import org.identityconnectors.framework.common.objects.AttributeDelta;
-import org.identityconnectors.framework.common.objects.AttributeDeltaBuilder;
-import org.identityconnectors.framework.common.objects.ObjectClass;
-import org.identityconnectors.framework.common.objects.OperationOptions;
-import org.identityconnectors.framework.common.objects.OperationalAttributes;
-import org.identityconnectors.framework.common.objects.Uid;
+import org.identityconnectors.framework.common.objects.*;
 import org.identityconnectors.framework.spi.ConnectorClass;
 
-import com.evolveum.polygon.common.SchemaUtil;
-import com.evolveum.polygon.connector.ldap.AbstractLdapConfiguration;
-import com.evolveum.polygon.connector.ldap.AbstractLdapConnector;
-import com.evolveum.polygon.connector.ldap.ErrorHandler;
-import com.evolveum.polygon.connector.ldap.schema.LdapFilterTranslator;
-import com.evolveum.polygon.connector.ldap.schema.AbstractSchemaTranslator;
+import java.util.*;
 
 @ConnectorClass(displayNameKey = "connector.ldap.edirectory.display", configurationClass = EDirectoryLdapConfiguration.class)
 public class EDirectoryLdapConnector extends AbstractLdapConnector<EDirectoryLdapConfiguration> {
@@ -194,7 +189,7 @@ public class EDirectoryLdapConnector extends AbstractLdapConnector<EDirectoryLda
 		}
 		for (Object val: values) {
 			Dn memberDn = getSchemaTranslator().toDn((String)val);
-			List<Modification> mods = new ArrayList<Modification>(1);
+			List<Modification> mods = new ArrayList<>(1);
 			mods.add(new DefaultModification(modOp, EDirectoryConstants.ATTRIBUTE_GROUP_MEMBERSHIP_NAME, groupDn.toString()));
 			// No need to update securityEquals. eDirectory is doing that by itself
 			// (the question is why it cannot do also to the groupMembership?)
