@@ -75,10 +75,7 @@ import com.evolveum.polygon.connector.ldap.search.DefaultSearchStrategy;
 import com.evolveum.polygon.connector.ldap.search.SearchStrategy;
 import com.evolveum.polygon.connector.ldap.search.SimplePagedResultsSearchStrategy;
 import com.evolveum.polygon.connector.ldap.search.VlvSearchStrategy;
-import com.evolveum.polygon.connector.ldap.sync.OpenLdapAccessLogSyncStrategy;
-import com.evolveum.polygon.connector.ldap.sync.AdDirSyncStrategy;
 import com.evolveum.polygon.connector.ldap.sync.ModifyTimestampSyncStrategy;
-import com.evolveum.polygon.connector.ldap.sync.SunChangelogSyncStrategy;
 import com.evolveum.polygon.connector.ldap.sync.SyncStrategy;
 import org.identityconnectors.framework.spi.operations.CreateOp;
 import org.identityconnectors.framework.spi.operations.DeleteOp;
@@ -1870,17 +1867,8 @@ public abstract class AbstractLdapConnector<C extends AbstractLdapConfiguration>
             switch (configuration.getSynchronizationStrategy()) {
                 case LdapConfiguration.SYNCHRONIZATION_STRATEGY_NONE:
                     throw new UnsupportedOperationException("Synchronization disabled (synchronizationStrategy=none)");
-                case LdapConfiguration.SYNCHRONIZATION_STRATEGY_SUN_CHANGE_LOG:
-                    syncStrategy = new SunChangelogSyncStrategy<>(configuration, connectionManager, getSchemaManager(), getSchemaTranslator(), getErrorHandler());
-                    break;
                 case LdapConfiguration.SYNCHRONIZATION_STRATEGY_MODIFY_TIMESTAMP:
                     syncStrategy = createModifyTimestampSyncStrategy();
-                    break;
-                case LdapConfiguration.SYNCHRONIZATION_STRATEGY_OPEN_LDAP_ACCESSLOG:
-                    syncStrategy = new OpenLdapAccessLogSyncStrategy<>(configuration, connectionManager, getSchemaManager(), getSchemaTranslator(), getErrorHandler());
-                    break;
-                case LdapConfiguration.SYNCHRONIZATION_STRATEGY_AD_DIR_SYNC:
-                    syncStrategy = new AdDirSyncStrategy<>(configuration, connectionManager, getSchemaManager(), getSchemaTranslator(), getErrorHandler());
                     break;
                 case LdapConfiguration.SYNCHRONIZATION_STRATEGY_AUTO:
                     syncStrategy = chooseSyncStrategyAuto();
@@ -1897,13 +1885,7 @@ public abstract class AbstractLdapConnector<C extends AbstractLdapConfiguration>
     }
 
     private SyncStrategy<C> chooseSyncStrategyAuto() {
-        Entry rootDse = connectionManager.getRootDse();
-        org.apache.directory.api.ldap.model.entry.Attribute changelogAttribute = rootDse.get(SunChangelogSyncStrategy.ROOT_DSE_ATTRIBUTE_CHANGELOG_NAME);
-        if (changelogAttribute != null) {
-            LOG.ok("Choosing Sun ChangeLog sync strategy (found {0} attribute in root DSE)", SunChangelogSyncStrategy.ROOT_DSE_ATTRIBUTE_CHANGELOG_NAME);
-            return new SunChangelogSyncStrategy<>(configuration, connectionManager, getSchemaManager(), getSchemaTranslator(), getErrorHandler());
-        }
-        LOG.ok("Choosing modifyTimestamp sync strategy (fallback)");
+        LOG.ok("Choosing modifyTimestamp sync strategy (default)");
         return createModifyTimestampSyncStrategy();
     }
 

@@ -45,9 +45,6 @@ import org.identityconnectors.framework.common.objects.OperationalAttributes;
 import com.evolveum.polygon.connector.ldap.schema.AbstractSchemaTranslator;
 import com.evolveum.polygon.connector.ldap.schema.AttributeHandler;
 
-import static com.evolveum.polygon.connector.ldap.ad.AdConstants.ATTRIBUTE_OBJECT_SID_NAME;
-import static com.evolveum.polygon.connector.ldap.ad.AdConstants.ATTRIBUTE_SAM_ACCOUNT_NAME_NAME;
-
 /**
  * @author semancik
  */
