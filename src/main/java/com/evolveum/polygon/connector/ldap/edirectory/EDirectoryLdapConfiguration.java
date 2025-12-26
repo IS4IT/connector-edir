@@ -16,9 +16,16 @@
 
 package com.evolveum.polygon.connector.ldap.edirectory;
 
+import org.apache.directory.api.ldap.model.constants.SchemaConstants;
+import org.apache.directory.api.ldap.model.entry.Value;
+import org.identityconnectors.framework.common.objects.SuggestedValues;
+import org.identityconnectors.framework.common.objects.SuggestedValuesBuilder;
 import org.identityconnectors.framework.spi.ConfigurationProperty;
 
 import com.evolveum.polygon.connector.ldap.AbstractLdapConfiguration;
+
+import java.util.HashMap;
+import java.util.Map;
 
 /**
  * eDirectory LDAP Connector configuration.

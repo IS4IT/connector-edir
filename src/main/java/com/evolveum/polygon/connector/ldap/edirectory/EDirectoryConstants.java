@@ -20,8 +20,9 @@ package com.evolveum.polygon.connector.ldap.edirectory;
  *
  */
 public class EDirectoryConstants {
-	
-	public static final String ATTRIBUTE_LOGIN_DISABLED_NAME = "loginDisabled";
+    public static final String ROOT_DSE_DIR_TREENAME = "directoryTreeName";
+
+    public static final String ATTRIBUTE_LOGIN_DISABLED_NAME = "loginDisabled";
 	public static final String ATTRIBUTE_LOCKOUT_LOCKED_NAME = "lockedByIntruder";
 	public static final String ATTRIBUTE_LOCKOUT_RESET_TIME_NAME = "loginIntruderResetTime";
 	public static final String ATTRIBUTE_GROUP_MEMBERSHIP_NAME = "groupMembership";

@@ -197,7 +197,50 @@ public class EDirectoryLdapConnector extends AbstractLdapConnector<EDirectoryLda
 		}
 	}
 
-	@Override
+    @Override
+    public Map<String, SuggestedValues> discoverConfiguration() {
+        Map<String, SuggestedValues> suggestions = new HashMap<>();
+
+        ConnectionManager<EDirectoryLdapConfiguration> connectionManager = getConnectionManager();
+        EDirectoryLdapConfiguration configuration = getConfiguration();
+
+        LOG.info("Configuration discovery, working with root DSE:\n{0}", connectionManager.getRootDse());
+
+        // Get base contexts from Root DSE, add non-standard root context t=<TREENAME>
+        if (configuration.getBaseContext() == null) {
+
+            org.apache.directory.api.ldap.model.entry.Attribute directoryTreeName = connectionManager.getRootDseAttribute(EDirectoryConstants.ROOT_DSE_DIR_TREENAME);
+
+            SuggestedValuesBuilder svbldr = new SuggestedValuesBuilder();
+            if (directoryTreeName != null) {
+                for (Value treeNameValue : directoryTreeName) {
+                    svbldr.addValues(treeNameValue.getString());
+                }
+            }
+
+            org.apache.directory.api.ldap.model.entry.Attribute namingContexts = connectionManager.getRootDseAttribute(SchemaConstants.NAMING_CONTEXTS_AT);
+            if (namingContexts != null) {
+                for (Value namingContextValue : namingContexts) {
+                    svbldr.addValues(namingContextValue.getString());
+                }
+            }
+
+            suggestions.put(AbstractLdapConfiguration.CONF_PROP_NAME_BASE_CONTEXT, svbldr.build());
+        }
+
+        // Server-specific suggestions
+        addServerSpecificConfigurationSuggestions(suggestions);
+
+        return suggestions;
+    }
+
+    protected void addServerSpecificConfigurationSuggestions(Map<String, SuggestedValues> suggestions) {
+        // TODO: server-specific suggestions
+        // Used in subclasses
+    }
+
+
+    @Override
 	protected ErrorHandler createErrorHandler()
 	{
 		// TODO Auto-generated method stub
