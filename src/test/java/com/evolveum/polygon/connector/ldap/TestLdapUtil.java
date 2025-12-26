@@ -61,7 +61,7 @@ public class TestLdapUtil {
             info("Dn '"+upper+"' is correctly evaluated as ancestor of '"+
                     lower+"'");
         } else {
-            info("Dn '"+upper+"' is correctly evaluated NOT yo be ancestor of '"+
+            info("Dn '"+upper+"' is correctly evaluated NOT to be ancestor of '"+
                     lower+"'");
         }
     }
