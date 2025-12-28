@@ -63,7 +63,7 @@ public abstract class AbstractLdapConfiguration extends AbstractConfiguration {
     /**
      * The LDAP server port.
      */
-    private int port = DEFAULT_PORT;
+    private Integer port; //= DEFAULT_PORT;
 
     public static final String CONF_PROP_NAME_PORT = "port";
 
@@ -600,17 +600,17 @@ public abstract class AbstractLdapConfiguration extends AbstractConfiguration {
         this.host = host;
     }
 
-    @ConfigurationProperty(order = 2, allowedValues = { "389", "636" }, allowedValuesOpenness = ValueListOpenness.OPEN)
-    public int getPort() {
+    @ConfigurationProperty(required = true, order = 2, allowedValues = { "389", "636" }, allowedValuesOpenness = ValueListOpenness.OPEN)
+    public Integer getPort() {
         return port;
     }
 
     @SuppressWarnings("unused")
-    public void setPort(int port) {
+    public void setPort(Integer port) {
         this.port = port;
     }
 
-    @ConfigurationProperty(order = 3, allowedValues = { CONNECTION_SECURITY_NONE, CONNECTION_SECURITY_SSL, CONNECTION_SECURITY_STARTTLS })
+    @ConfigurationProperty(required = true, order = 3, allowedValues = { CONNECTION_SECURITY_NONE, CONNECTION_SECURITY_SSL, CONNECTION_SECURITY_STARTTLS })
     public String getConnectionSecurity() {
         return connectionSecurity;
     }
@@ -650,7 +650,7 @@ public abstract class AbstractLdapConfiguration extends AbstractConfiguration {
         this.enabledCipherSuites = enabledCipherSuites;
     }
 
-    @ConfigurationProperty(order = 7)
+    @ConfigurationProperty(required = true, order = 7)
     public String getAuthenticationType() {
         return authenticationType;
     }
@@ -660,7 +660,7 @@ public abstract class AbstractLdapConfiguration extends AbstractConfiguration {
         this.authenticationType = authenticationType;
     }
 
-    @ConfigurationProperty(order = 8)
+    @ConfigurationProperty(required = true, order = 8)
     public String getBindDn() {
         return bindDn;
     }
@@ -670,7 +670,7 @@ public abstract class AbstractLdapConfiguration extends AbstractConfiguration {
         this.bindDn = bindDn;
     }
 
-    @ConfigurationProperty(order = 9)
+    @ConfigurationProperty(required = true, order = 9)
     public GuardedString getBindPassword() {
         return bindPassword;
     }

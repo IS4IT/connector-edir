@@ -16,10 +16,6 @@
 
 package com.evolveum.polygon.connector.ldap.edirectory;
 
-import org.apache.directory.api.ldap.model.constants.SchemaConstants;
-import org.apache.directory.api.ldap.model.entry.Value;
-import org.identityconnectors.framework.common.objects.SuggestedValues;
-import org.identityconnectors.framework.common.objects.SuggestedValuesBuilder;
 import org.identityconnectors.framework.spi.ConfigurationProperty;
 
 import com.evolveum.polygon.connector.ldap.AbstractLdapConfiguration;
@@ -48,6 +44,9 @@ public class EDirectoryLdapConfiguration extends AbstractLdapConfiguration {
     private boolean manageReciprocalGroupAttributes = true;
     
     private boolean manageEquivalenceAttributes = true;
+
+	public EDirectoryLdapConfiguration(){
+	}
     
     @ConfigurationProperty(order = 100)
 	public String getUserObjectClass() {
