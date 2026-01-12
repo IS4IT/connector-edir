@@ -79,7 +79,6 @@ import com.evolveum.polygon.connector.ldap.sync.ModifyTimestampSyncStrategy;
 import com.evolveum.polygon.connector.ldap.sync.SyncStrategy;
 import org.identityconnectors.framework.spi.operations.CreateOp;
 import org.identityconnectors.framework.spi.operations.DeleteOp;
-import org.identityconnectors.framework.spi.operations.DiscoverConfigurationOp;
 import org.identityconnectors.framework.spi.operations.SchemaOp;
 import org.identityconnectors.framework.spi.operations.SearchOp;
 import org.identityconnectors.framework.spi.operations.SyncOp;
@@ -89,7 +88,7 @@ import org.identityconnectors.framework.spi.operations.UpdateDeltaOp;
 import static com.evolveum.polygon.connector.ldap.LdapConstants.*;
 public abstract class AbstractLdapConnector<C extends AbstractLdapConfiguration>
         implements PoolableConnector, TestOp, SchemaOp, SearchOp<Filter>, CreateOp, DeleteOp, UpdateDeltaOp,
-        SyncOp, DiscoverConfigurationOp {
+        SyncOp {
 
     private static final Log LOG = Log.getLog(AbstractLdapConnector.class);
 
@@ -145,14 +144,14 @@ public abstract class AbstractLdapConnector<C extends AbstractLdapConfiguration>
 
     public ConnectionLog getConnectionLog() { return connectionLog; }
 
-    @Override
+    //@Override
     public void testPartialConfiguration() {
         LOG.info("Test partial configuration, {0} connector instance {1}", this.getClass().getSimpleName(), this);
         cleanupBeforeTest();
         connectionManager.test();
     }
 
-    @Override
+    //@Override
     public Map<String, SuggestedValues> discoverConfiguration() {
         Map<String, SuggestedValues> suggestions = new HashMap<>();
 

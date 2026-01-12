@@ -63,7 +63,7 @@ public abstract class AbstractLdapConfiguration extends AbstractConfiguration {
     /**
      * The LDAP server port.
      */
-    private Integer port; //= DEFAULT_PORT;
+    private Integer port = DEFAULT_PORT;
 
     public static final String CONF_PROP_NAME_PORT = "port";
 
@@ -96,7 +96,7 @@ public abstract class AbstractLdapConfiguration extends AbstractConfiguration {
      * When set to false, connector checks server certificate validity in SSL/TLS mode (recommended).
      * When set to true, connector does not check server certificate validity. Do not use this option in the production.
      */
-    private boolean allowUntrustedSsl = false;
+    private boolean allowUntrustedSsl = true;
 
     /**
      * Set of security protocols that are acceptable for protocol negotiation.

@@ -469,7 +469,7 @@ public class ServerConnectionPool<C extends AbstractLdapConfiguration> {
             connection.setSocketSessionConfig(socketSessionConfig);
         }
         try {
-            LOG.info("Connecting to {0}:{1} as {2}", connectionConfig.getLdapHost(), connectionConfig.getLdapPort(), userDn);
+            LOG.info("Connecting to {0}:{1} as {2}", connectionConfig.getLdapHost(), String.valueOf(connectionConfig.getLdapPort()), userDn);
             if (LOG.isOk()) {
                 String connectionSecurity = "none";
                 if (connectionConfig.isUseSsl()) {
