@@ -520,7 +520,7 @@ public abstract class AbstractLdapConnector<C extends AbstractLdapConfiguration>
             // This is not supported by LDAP. But it can be quite common. Therefore we want to support it as a special
             // case by executing two searches.
 
-            searchStrategy = searchBySecondaryIdenfiers(connIdFilter, objectClass, ldapObjectClass, handler, options);
+            searchStrategy = searchBySecondaryIdentifiers(connIdFilter, objectClass, ldapObjectClass, handler, options);
 
         } else {
 
@@ -625,10 +625,10 @@ public abstract class AbstractLdapConnector<C extends AbstractLdapConfiguration>
         }
     }
 
-    private SearchStrategy<C> searchBySecondaryIdenfiers(Filter icfFilter, ObjectClass objectClass, org.apache.directory.api.ldap.model.schema.ObjectClass ldapObjectClass,
-            final ResultsHandler handler, OperationOptions options) {
+    private SearchStrategy<C> searchBySecondaryIdentifiers(Filter icfFilter, ObjectClass objectClass, org.apache.directory.api.ldap.model.schema.ObjectClass ldapObjectClass,
+                                                           final ResultsHandler handler, OperationOptions options) {
         // This translated to a base search.
-        // We know that this can return at most one object. Therefore always use simple search.
+        // We know that this can return at most one object, therefore always use simple search.
 
         Filter leftSubfilter = ((OrFilter)icfFilter).getLeft();
         Filter rightSubfilter = ((OrFilter)icfFilter).getRight();
@@ -670,7 +670,7 @@ public abstract class AbstractLdapConnector<C extends AbstractLdapConfiguration>
 
         // Search by the other attribute now
 
-        // We know that this can return at most one object. Therefore always use simple search.
+        // We know that this can return at most one object, therefore always use simple search.
         SearchStrategy<C> searchStrategy = getDefaultSearchStrategy(objectClass, ldapObjectClass, innerHandler, options);
         LdapFilterTranslator filterTranslator = new LdapFilterTranslator(getSchemaTranslator(), ldapObjectClass);
         ScopedFilter scopedFilter = filterTranslator.translate(otherSubfilter, ldapObjectClass);
@@ -782,7 +782,7 @@ public abstract class AbstractLdapConnector<C extends AbstractLdapConfiguration>
         if (options != null && options.getAllowPartialResults() != null && options.getAllowPartialResults() &&
                 options.getPagedResultsOffset() == null && options.getPagedResultsCookie() == null &&
                 options.getPageSize() == null) {
-            // Search that allow partial results, no need for paging. Regardless of the configured strategy.
+            // Search that allows partial results, no need for paging, regardless of the configured strategy.
             return getDefaultSearchStrategy(objectClass, ldapObjectClass, handler, options);
         }
 
@@ -816,7 +816,7 @@ public abstract class AbstractLdapConnector<C extends AbstractLdapConfiguration>
             if (options.getPagedResultsOffset() != null) {
                 // Always prefer VLV even if the offset is 1. We expect that the client will use paging and subsequent
                 // queries will come with offset other than 1. The server may use a slightly different sorting for VLV and other
-                // paging mechanisms. Bu we want consisten results. Therefore in this case prefer VLV even if it might be less efficient.
+                // paging mechanisms. But since we want consistent results, in this case we prefer VLV even if it might be less efficient.
                 if (connectionManager.isControlSupported(VirtualListViewRequest.OID)) {
                     LOG.ok("Selecting VLV search strategy because strategy setting is set to {0} and the request specifies an offset", pagingStrategy);
                     SearchStrategy<C> searchStrategy = new VlvSearchStrategy<>(connectionManager, configuration, getSchemaTranslator(), objectClass, ldapObjectClass, handler, getErrorHandler(), connectionLog, options);
