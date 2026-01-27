@@ -200,15 +200,28 @@ public abstract class AbstractLdapConnector<C extends AbstractLdapConfiguration>
         }
     }
 
+    /**
+     * Checks that the configuration is complete and valid.
+     * Validates the base context configuration.
+     */
     protected void checkConfigurationCompleteness() {
         configuration.validateBaseContext();
     }
 
+    /**
+     * Cleans up resources before running tests.
+     * Resets the schema manager and schema translator to null.
+     */
     protected void cleanupBeforeTest() {
         schemaManager = null;
         schemaTranslator = null;
     }
 
+    /**
+     * Performs additional tests during connector initialization.
+     * Analyzes attribute definitions and DN parsing, and validates that
+     * the normalizer registry is properly populated.
+     */
     protected void extraTests() {
 
         analyzeAttrDef("dc");
@@ -223,6 +236,13 @@ public abstract class AbstractLdapConnector<C extends AbstractLdapConfiguration>
 
     }
 
+    /**
+     * Analyzes and logs detailed information about an LDAP attribute definition.
+     * This includes the attribute type, equality matching rule, normalizer, syntax,
+     * and syntax checker. Also tests normalization with a sample string.
+     *
+     * @param attrName the name of the attribute to analyze
+     */
     private void analyzeAttrDef(String attrName) {
         AttributeType attributeType = getSchemaManager().getAttributeType(attrName);
         LOG.ok("Definition of LDAP attribute {0}: {1}", attrName, attributeType);
@@ -250,6 +270,13 @@ public abstract class AbstractLdapConnector<C extends AbstractLdapConfiguration>
         }
     }
 
+    /**
+     * Analyzes and logs detailed information about a Distinguished Name (DN).
+     * Parses the DN string and logs information about the parsed DN, its RDNs,
+     * and the last RDN's AVA (Attribute Value Assertion) components.
+     *
+     * @param stringDn the DN string to analyze, or null to skip analysis
+     */
     private void analyzeDn(String stringDn) {
         if (stringDn == null) {
             return;
@@ -267,6 +294,14 @@ public abstract class AbstractLdapConnector<C extends AbstractLdapConfiguration>
     }
 
 
+    /**
+     * Converts a string representation of a Distinguished Name to a Dn object.
+     *
+     * @param schemaManager the schema manager used for DN parsing
+     * @param stringDn the string representation of the DN to parse
+     * @return the parsed Dn object
+     * @throws ConnectorException if the DN string cannot be parsed
+     */
     private Dn asDn(SchemaManager schemaManager, String stringDn) {
         try {
             return new Dn(schemaManager, stringDn);
@@ -275,6 +310,12 @@ public abstract class AbstractLdapConnector<C extends AbstractLdapConfiguration>
         }
     }
 
+    /**
+     * Gets the schema manager, initializing it if necessary.
+     * This method ensures the schema manager is lazily initialized on first access.
+     *
+     * @return the schema manager instance
+     */
     protected SchemaManager getSchemaManager() {
         if (schemaManager == null) {
             initializeSchemaManager();
@@ -282,6 +323,12 @@ public abstract class AbstractLdapConnector<C extends AbstractLdapConfiguration>
         return schemaManager;
     }
 
+    /**
+     * Initializes the schema manager by loading schemas from the LDAP server.
+     * This includes loading the internal system schema and the server's schema.
+     * The schema manager is used for DN parsing, attribute type lookups, and
+     * other schema-related operations.
+     */
     protected void initializeSchemaManager() {
         LdapNetworkConnection connection = null;
         try {
@@ -501,17 +548,20 @@ public abstract class AbstractLdapConnector<C extends AbstractLdapConfiguration>
 
     @Override
     public void executeQuery(ObjectClass objectClass, Filter connIdFilter, ResultsHandler handler, OperationOptions options) {
+        LOG.info("Executing query for object class {0}, filter: {1}", objectClass.getObjectClassValue(), connIdFilter);
         prepareConnIdSchema();
         org.apache.directory.api.ldap.model.schema.ObjectClass ldapObjectClass = getSchemaTranslator().toLdapObjectClass(objectClass);
 
         SearchStrategy<C> searchStrategy;
         if (isEqualsFilter(connIdFilter, Name.NAME)) {
             // Search by __NAME__, which means DN. This translated to a base search.
+            LOG.info("Search by DN");
             searchStrategy = searchByDn(schemaTranslator.toDn(((EqualsFilter)connIdFilter).getAttribute()),
                     objectClass, ldapObjectClass, handler, options);
 
         } else if (isEqualsFilter(connIdFilter, Uid.NAME)) {
             // Search by __UID__. Special case for performance.
+            LOG.info("Search by UID");
             searchStrategy = searchByUid((Uid)((EqualsFilter)connIdFilter).getAttribute(),
                     objectClass, ldapObjectClass, handler, options);
 
@@ -519,11 +569,11 @@ public abstract class AbstractLdapConnector<C extends AbstractLdapConfiguration>
             // Very special case. Search by DN or other secondary identifier value. It is used by IDMs to get object by
             // This is not supported by LDAP. But it can be quite common. Therefore we want to support it as a special
             // case by executing two searches.
-
+            LOG.info("Search by secondary identifiers");
             searchStrategy = searchBySecondaryIdentifiers(connIdFilter, objectClass, ldapObjectClass, handler, options);
 
         } else {
-
+            LOG.info("Usual search");
             searchStrategy = searchUsual(connIdFilter, objectClass, ldapObjectClass, handler, options);
 
         }
@@ -531,12 +581,14 @@ public abstract class AbstractLdapConnector<C extends AbstractLdapConfiguration>
         if (handler instanceof SearchResultsHandler) {
             if (searchStrategy == null) {
                 // We have found nothing
+                LOG.info("Search returned no results");
                 SearchResult searchResult = new SearchResult(null, 0, true);
                 ((SearchResultsHandler)handler).handleResult(searchResult);
             } else {
                 String cookie = searchStrategy.getPagedResultsCookie();
                 int remainingResults = searchStrategy.getRemainingPagedResults();
                 boolean completeResultSet = searchStrategy.isCompleteResultSet();
+                LOG.info("Search completed: cookie present={0}, remaining results={1}, complete={2}", cookie != null, remainingResults, completeResultSet);
                 SearchResult searchResult = new SearchResult(cookie, remainingResults, completeResultSet);
                 ((SearchResultsHandler)handler).handleResult(searchResult);
             }
@@ -857,6 +909,7 @@ public abstract class AbstractLdapConnector<C extends AbstractLdapConfiguration>
 
     @Override
     public Uid create(ObjectClass connIdObjectClass, Set<Attribute> createAttributes, OperationOptions options) {
+        LOG.info("Creating entry for object class {0}", connIdObjectClass.getObjectClassValue());
 
         String dnStringFromName = null;
         Set<AttributeDelta> membershipAssociationAttributeDeltas = new HashSet<>();
@@ -869,6 +922,7 @@ public abstract class AbstractLdapConnector<C extends AbstractLdapConfiguration>
         if (dnStringFromName == null) {
             throw new InvalidAttributeValueException("Missing NAME attribute");
         }
+        LOG.info("Creating LDAP entry with DN: {0}", dnStringFromName);
 
         AbstractSchemaTranslator<C> schemaTranslator = getSchemaTranslator();
         org.apache.directory.api.ldap.model.schema.ObjectClass ldapStructuralObjectClass = schemaTranslator.toLdapObjectClass(connIdObjectClass);
@@ -1029,8 +1083,10 @@ public abstract class AbstractLdapConnector<C extends AbstractLdapConfiguration>
 
         if (addResponse.getLdapResult().getResultCode() != ResultCodeEnum.SUCCESS) {
             connectionManager.returnConnection(connection);
+            LOG.error("Add operation failed for DN {0}: {1}", dnStringFromName, addResponse.getLdapResult());
             throw processCreateResult(dnStringFromName, addResponse);
         }
+        LOG.info("LDAP entry created successfully for DN {0}", dnStringFromName);
 
         String uidAttributeName = configuration.getUidAttribute();
         if (LdapUtil.isDnAttribute(uidAttributeName)) {
@@ -1602,11 +1658,13 @@ public abstract class AbstractLdapConnector<C extends AbstractLdapConfiguration>
     }
 
     protected void modify(Dn dn, List<Modification> modifications, OperationOptions options) {
+        LOG.info("Modifying entry DN {0}, modifications count: {1}", dn, modifications.size());
         LdapNetworkConnection connection = connectionManager.getConnection(dn, options);
         try {
             PermissiveModify permissiveModifyControl = null;
             if (isUsePermissiveModify()) {
                 permissiveModifyControl = new PermissiveModifyImpl();
+                LOG.info("Using PermissiveModify control");
             }
             if (LOG.isOk()) {
                 OperationLog.logOperationReq(connection, "Modify REQ {0}: {1}, control={2}", dn, dumpModifications(modifications),
@@ -1629,11 +1687,14 @@ public abstract class AbstractLdapConnector<C extends AbstractLdapConfiguration>
             connectionLog.success(connection, "modify", dn);
 
             if (modifyResponse.getLdapResult().getResultCode() != ResultCodeEnum.SUCCESS) {
+                LOG.error("Modify operation failed for DN {0}: {1}", dn, modifyResponse.getLdapResult());
                 throw processModifyResult(dn, modifications, modifyResponse);
             }
+            LOG.info("Modify operation completed successfully for DN {0}", dn);
         } catch (LdapException e) {
             OperationLog.logOperationErr(connection, "Modify ERROR {0}: {1}: {2}", dn, dumpModifications(modifications), e.getMessage(), e);
             connectionLog.error(connection, "modify", e, dn);
+            LOG.error("LdapException during modify for DN {0}: {1}", dn, e.getMessage());
             throw processModifyResult(dn.toString(), modifications, e);
         } finally {
             connectionManager.returnConnection(connection);
@@ -1651,11 +1712,13 @@ public abstract class AbstractLdapConnector<C extends AbstractLdapConfiguration>
     protected void addAttributeModification(Dn dn, List<Modification> modifications,
             org.apache.directory.api.ldap.model.schema.ObjectClass ldapStructuralObjectClass,
             ObjectClass connIdObjectClass, AttributeDelta delta) {
+        LOG.info("Adding attribute modification for DN {0}, attribute: {1}", dn, delta.getName());
         AbstractSchemaTranslator<C> schemaTranslator = getSchemaTranslator();
         String connIdAttributeName = delta.getName();
         AttributeType ldapAttributeType = schemaTranslator.toLdapAttribute(ldapStructuralObjectClass, connIdAttributeName);
         if (ldapAttributeType == null && !configuration.isAllowUnknownAttributes()
                 && !ArrayUtils.contains(configuration.getOperationalAttributes(), connIdAttributeName)) {
+            LOG.error("Unknown attribute {0} in object class {1}", connIdAttributeName, connIdObjectClass);
             throw new InvalidAttributeValueException("Unknown attribute "+ connIdAttributeName +" in object class "+connIdObjectClass);
         }
         addLdapModification(dn, modifications, ModificationOperation.REPLACE_ATTRIBUTE, ldapAttributeType, connIdAttributeName, delta.getValuesToReplace());
@@ -1762,6 +1825,7 @@ public abstract class AbstractLdapConnector<C extends AbstractLdapConfiguration>
     protected void postUpdate(ObjectClass connIdObjectClass, Uid uid, Set<AttributeDelta> deltas,
             OperationOptions options,
             Dn dn, org.apache.directory.api.ldap.model.schema.ObjectClass ldapStructuralObjectClass, List<Modification> ldapModifications) {
+        LOG.info("Post-update processing for DN {0}, uid: {1}, delta count: {2}", dn, uid, deltas.size());
         // Nothing to do here. Just for override in subclasses.
     }
 
@@ -1850,15 +1914,20 @@ public abstract class AbstractLdapConnector<C extends AbstractLdapConfiguration>
     @Override
     public void sync(ObjectClass objectClass, SyncToken token, SyncResultsHandler handler,
             OperationOptions options) {
+        LOG.info("Sync started for object class {0}, token: {1}", objectClass.getObjectClassValue(), token);
         prepareConnIdSchema();
         SyncStrategy<C> strategy = chooseSyncStrategy();
         strategy.sync(objectClass, token, handler, options);
+        LOG.info("Sync completed for object class {0}", objectClass.getObjectClassValue());
     }
 
     @Override
     public SyncToken getLatestSyncToken(ObjectClass objectClass) {
+        LOG.info("Getting latest sync token for object class {0}", objectClass.getObjectClassValue());
         SyncStrategy<C> strategy = chooseSyncStrategy();
-        return strategy.getLatestSyncToken(objectClass);
+        SyncToken token = strategy.getLatestSyncToken(objectClass);
+        LOG.info("Latest sync token retrieved: {0}", token);
+        return token;
     }
 
     private SyncStrategy<C> chooseSyncStrategy() {
@@ -1890,31 +1959,34 @@ public abstract class AbstractLdapConnector<C extends AbstractLdapConfiguration>
 
     @Override
     public void delete(ObjectClass objectClass, Uid uid, OperationOptions options) {
+        LOG.info("Deleting entry for object class {0}, uid: {1}", objectClass.getObjectClassValue(), uid);
 
         Dn dn;
         if (getConfiguration().isUseUnsafeNameHint() && uid.getNameHint() != null) {
             String dnHintString = uid.getNameHintValue();
             dn = getSchemaTranslator().toDn(dnHintString);
-            LOG.ok("Using (unsafe) DN from the name hint: {0}", dn);
+            LOG.info("Using (unsafe) DN from the name hint: {0}", dn);
             try {
 
                 deleteAttempt(objectClass, dn, uid, options);
-
+                LOG.info("Delete successful using hint DN: {0}", dn);
                 return;
 
             } catch (Throwable e) {
-                LOG.warn("Attempt to delete object with DN failed (DN taked from the name hint). The operation will continue with next attempt. Error: {0}",
+                LOG.warn("Attempt to delete object with DN failed (DN taken from the name hint). The operation will continue with next attempt. Error: {0}",
                         e.getMessage(), e);
             }
         }
 
         dn = resolveDn(objectClass, uid, options);
-        LOG.ok("Resolved DN: {0}", dn);
+        LOG.info("Resolved DN for deletion: {0}", dn);
 
         deleteAttempt(objectClass, dn, uid, options);
+        LOG.info("Delete completed for DN: {0}", dn);
     }
 
     private void deleteAttempt(ObjectClass objectClass, Dn dn, Uid uid, OperationOptions options) {
+        LOG.info("Delete attempt for DN: {0}", dn);
 
         LdapNetworkConnection connection = connectionManager.getConnection(dn, options);
 
@@ -2123,6 +2195,7 @@ public abstract class AbstractLdapConnector<C extends AbstractLdapConfiguration>
 
     @Override
     public void checkAlive() {
+        LOG.info("Checking if connector instance is alive: {0}", this.getClass().getSimpleName());
         // We want to always "pass" the alive test, even if all our connections are dead.
         // This connector instance is initialized, it has fetched and processed LDAP schema.
         // That initialization is not cheap, we do not want to waste it.
@@ -2130,7 +2203,7 @@ public abstract class AbstractLdapConnector<C extends AbstractLdapConfiguration>
         //
         // Therefore, just pretend everything is OK.
         // If there are any problems, we will handle them as a real operation request comes.
-        LOG.ok("check alive: OK (pretended)");
+        LOG.info("Check alive: OK (pretended)");
     }
 
     @Override
@@ -2138,12 +2211,14 @@ public abstract class AbstractLdapConnector<C extends AbstractLdapConfiguration>
         LOG.info("Disposing {0} connector instance {1}", this.getClass().getSimpleName(), this);
         configuration = null;
         if (connectionManager != null) {
+            LOG.info("Closing connection manager");
             connectionManager.close("connector dispose");
             connectionManager = null;
             schemaManager = null;
             schemaTranslator = null;
+            LOG.info("Connector disposed successfully");
         } else {
-            LOG.ok("Not closing connection because connection manager is already null");
+            LOG.info("Not closing connection because connection manager is already null");
         }
     }
 
