@@ -284,17 +284,17 @@ public class EDirectoryLdapConnector extends AbstractLdapConnector<EDirectoryLda
 	 * 
 	 * @param groupDn the distinguished name of the group
 	 * @param modOp the modification operation (ADD_ATTRIBUTE or REMOVE_ATTRIBUTE)
-	 * @param values the list of member DNs to add or remove
+	 * @param members the list of member DNs to add or remove
 	 * @param options the operation options
 	 */
-	private void addGroupMemberShipModifications(Dn groupDn, ModificationOperation modOp, List<Object> values, OperationOptions options) {
-		if (values == null) {
+	private void addGroupMemberShipModifications(Dn groupDn, ModificationOperation modOp, List<Object> members, OperationOptions options) {
+		if (members == null) {
 			LOG.info("No values to process for group membership modification on group {0}", groupDn);
 			return;
 		}
-		LOG.info("Processing {0} group membership modifications for group {1}, operation: {2}", values.size(), groupDn, modOp);
-		for (Object val: values) {
-			Dn memberDn = getSchemaTranslator().toDn((String)val);
+		LOG.info("Processing {0} group membership modifications for group {1}, operation: {2}", members.size(), groupDn, modOp);
+		for (Object member: members) {
+			Dn memberDn = getSchemaTranslator().toDn((String)member);
 			LOG.info("Applying {0} operation to member DN {1}", modOp, memberDn);
 			List<Modification> mods = new ArrayList<>(1);
 			mods.add(new DefaultModification(modOp, EDirectoryConstants.ATTRIBUTE_GROUP_MEMBERSHIP_NAME, groupDn.toString()));

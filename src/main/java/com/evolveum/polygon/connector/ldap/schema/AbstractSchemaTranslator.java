@@ -1290,7 +1290,11 @@ public abstract class AbstractSchemaTranslator<C extends AbstractLdapConfigurati
 
             if (bytes == null && ldapValue.getString() != null) {
                 // Binary value incorrectly detected as string value.
-                // TODO: Conversion to Java string may has broken the data. Do we need to do some magic to fix it?
+                // TODO: Conversion to Java string may have broken the data. Do we need to do some magic to fix it?
+                if (LOG.isOk()) {
+                    LOG.ok("LDAP identifier value for attribute {0} was detected as string, trying to convert to binary",
+                            ldapAttributeName);
+                }
                 bytes = ldapValue.getString().getBytes(StandardCharsets.UTF_8);
             }
 
