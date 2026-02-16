@@ -21,7 +21,6 @@ import java.util.List;
 import java.util.Map;
 
 import com.evolveum.polygon.connector.ldap.AbstractLdapConfiguration;
-import com.evolveum.polygon.connector.ldap.LdapConfiguration;
 import com.evolveum.polygon.connector.ldap.schema.AbstractSchemaTranslator;
 import org.apache.directory.api.ldap.model.entry.Entry;
 import org.apache.directory.api.ldap.model.exception.LdapInvalidDnException;
@@ -564,7 +563,7 @@ public class ServerDefinition {
     }
 
     public void dump(StringBuilder sb) {
-        if (connectionSecurity == null || LdapConfiguration.CONNECTION_SECURITY_NONE.equals(connectionSecurity)) {
+        if (connectionSecurity == null || AbstractLdapConfiguration.CONNECTION_SECURITY_NONE.equals(connectionSecurity)) {
             sb.append("ldap://");
         } else {
             sb.append("ldaps://");

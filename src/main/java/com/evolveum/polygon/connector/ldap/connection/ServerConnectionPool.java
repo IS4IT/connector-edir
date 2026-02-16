@@ -391,12 +391,12 @@ public class ServerConnectionPool<C extends AbstractLdapConfiguration> {
 
         String connectionSecurity = serverDefinition.getConnectionSecurity();
         //noinspection StatementWithEmptyBody
-        if (connectionSecurity == null || LdapConfiguration.CONNECTION_SECURITY_NONE.equals(connectionSecurity)) {
+        if (connectionSecurity == null || AbstractLdapConfiguration.CONNECTION_SECURITY_NONE.equals(connectionSecurity)) {
             // Nothing to do
-        } else if (LdapConfiguration.CONNECTION_SECURITY_SSL.equals(connectionSecurity)) {
+        } else if (AbstractLdapConfiguration.CONNECTION_SECURITY_SSL.equals(connectionSecurity)) {
             connectionConfig.setUseSsl(true);
             connectionConfig.setTrustManagers(createTrustManager());
-        } else if (LdapConfiguration.CONNECTION_SECURITY_STARTTLS.equals(connectionSecurity)) {
+        } else if (AbstractLdapConfiguration.CONNECTION_SECURITY_STARTTLS.equals(connectionSecurity)) {
             connectionConfig.setUseTls(true);
             connectionConfig.setTrustManagers(createTrustManager());
         } else {

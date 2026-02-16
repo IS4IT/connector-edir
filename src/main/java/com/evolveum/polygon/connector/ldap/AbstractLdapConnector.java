@@ -828,7 +828,7 @@ public abstract class AbstractLdapConnector<C extends AbstractLdapConfiguration>
         AbstractSchemaTranslator<C> schemaTranslator = getSchemaTranslator();
         String pagingStrategy = configuration.getPagingStrategy();
         if (pagingStrategy == null) {
-            pagingStrategy = LdapConfiguration.PAGING_STRATEGY_AUTO;
+            pagingStrategy = AbstractLdapConfiguration.PAGING_STRATEGY_AUTO;
         }
 
         if (options != null && options.getAllowPartialResults() != null && options.getAllowPartialResults() &&
@@ -838,12 +838,12 @@ public abstract class AbstractLdapConnector<C extends AbstractLdapConfiguration>
             return getDefaultSearchStrategy(objectClass, ldapObjectClass, handler, options);
         }
 
-        if (LdapConfiguration.PAGING_STRATEGY_NONE.equals(pagingStrategy)) {
+        if (AbstractLdapConfiguration.PAGING_STRATEGY_NONE.equals(pagingStrategy)) {
             // This may fail on a sizeLimit. But this is what has been configured so we are going to do it anyway.
             LOG.ok("Selecting default search strategy because strategy setting is set to {0}", pagingStrategy);
             return getDefaultSearchStrategy(objectClass, ldapObjectClass, handler, options);
 
-        } else if (LdapConfiguration.PAGING_STRATEGY_SPR.equals(pagingStrategy)) {
+        } else if (AbstractLdapConfiguration.PAGING_STRATEGY_SPR.equals(pagingStrategy)) {
             if (connectionManager.isControlSupported(PagedResults.OID)) {
                 LOG.ok("Selecting SimplePaged search strategy because strategy setting is set to {0}", pagingStrategy);
                 SearchStrategy<C> searchStrategy = new SimplePagedResultsSearchStrategy<>(connectionManager, configuration, schemaTranslator, objectClass, ldapObjectClass, handler, getErrorHandler(), connectionLog, options);
@@ -853,7 +853,7 @@ public abstract class AbstractLdapConnector<C extends AbstractLdapConfiguration>
                 throw new ConfigurationException("Configured paging strategy "+pagingStrategy+", but the server does not support PagedResultsControl.");
             }
 
-        } else if (LdapConfiguration.PAGING_STRATEGY_VLV.equals(pagingStrategy)) {
+        } else if (AbstractLdapConfiguration.PAGING_STRATEGY_VLV.equals(pagingStrategy)) {
             if (connectionManager.isControlSupported(VirtualListViewRequest.OID)) {
                 LOG.ok("Selecting VLV search strategy because strategy setting is set to {0}", pagingStrategy);
 
@@ -864,7 +864,7 @@ public abstract class AbstractLdapConnector<C extends AbstractLdapConfiguration>
                 throw new ConfigurationException("Configured paging strategy "+pagingStrategy+", but the server does not support VLV.");
             }
 
-        } else if (LdapConfiguration.PAGING_STRATEGY_AUTO.equals(pagingStrategy)) {
+        } else if (AbstractLdapConfiguration.PAGING_STRATEGY_AUTO.equals(pagingStrategy)) {
             if (options.getPagedResultsOffset() != null) {
                 // Always prefer VLV even if the offset is 1. We expect that the client will use paging and subsequent
                 // queries will come with offset other than 1. The server may use a slightly different sorting for VLV and other
@@ -1933,12 +1933,12 @@ public abstract class AbstractLdapConnector<C extends AbstractLdapConfiguration>
     private SyncStrategy<C> chooseSyncStrategy() {
         if (syncStrategy == null) {
             switch (configuration.getSynchronizationStrategy()) {
-                case LdapConfiguration.SYNCHRONIZATION_STRATEGY_NONE:
+                case AbstractLdapConfiguration.SYNCHRONIZATION_STRATEGY_NONE:
                     throw new UnsupportedOperationException("Synchronization disabled (synchronizationStrategy=none)");
-                case LdapConfiguration.SYNCHRONIZATION_STRATEGY_MODIFY_TIMESTAMP:
+                case AbstractLdapConfiguration.SYNCHRONIZATION_STRATEGY_MODIFY_TIMESTAMP:
                     syncStrategy = createModifyTimestampSyncStrategy();
                     break;
-                case LdapConfiguration.SYNCHRONIZATION_STRATEGY_AUTO:
+                case AbstractLdapConfiguration.SYNCHRONIZATION_STRATEGY_AUTO:
                     syncStrategy = chooseSyncStrategyAuto();
                     break;
                 default:

@@ -169,7 +169,7 @@ public abstract class SearchStrategy<C extends AbstractLdapConfiguration> {
 
     protected SearchCursor executeSearch(SearchRequest req) throws LdapException {
         if (req.getFilter() == null) {
-            req.setFilter(LdapConfiguration.SEARCH_FILTER_ALL);
+            req.setFilter(AbstractLdapConfiguration.SEARCH_FILTER_ALL);
         }
         logSearchRequest(req);
         SearchCursor searchCursor;

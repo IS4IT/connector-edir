@@ -103,7 +103,7 @@ public abstract class AbstractSchemaTranslator<C extends AbstractLdapConfigurati
 
     @SuppressWarnings("unchecked")
     public Schema translateSchema(ConnectionManager<C> connectionManager, ErrorHandler errorHandler) {
-        SchemaBuilder schemaBuilder = new SchemaBuilder(LdapConnector.class);
+        SchemaBuilder schemaBuilder = new SchemaBuilder(AbstractLdapConnector.class);
         LOG.ok("Translating LDAP schema from {0}", schemaManager);
 
         for (org.apache.directory.api.ldap.model.schema.ObjectClass ldapObjectClass: schemaManager.getObjectClassRegistry()) {
@@ -224,7 +224,7 @@ public abstract class AbstractSchemaTranslator<C extends AbstractLdapConfigurati
         // ICF NAME
         AttributeInfoBuilder nameAib = new AttributeInfoBuilder(Name.NAME);
         nameAib.setType(String.class);
-        nameAib.setNativeName(LdapConfiguration.PSEUDO_ATTRIBUTE_DN_NAME);
+        nameAib.setNativeName(AbstractLdapConfiguration.PSEUDO_ATTRIBUTE_DN_NAME);
         nameAib.setSubtype(AttributeInfo.Subtypes.STRING_LDAP_DN);
         nameAib.setRequired(true);
         attributeInfo = nameAib.build();
@@ -914,7 +914,7 @@ public abstract class AbstractSchemaTranslator<C extends AbstractLdapConfigurati
 
     protected Value toLdapPasswordValue(AttributeType ldapAttributeType, Object icfAttributeValue) {
         if (configuration.getPasswordHashAlgorithm() != null
-                && !LdapConfiguration.PASSWORD_HASH_ALGORITHM_NONE.equals(configuration.getPasswordHashAlgorithm())) {
+                && !AbstractLdapConfiguration.PASSWORD_HASH_ALGORITHM_NONE.equals(configuration.getPasswordHashAlgorithm())) {
             icfAttributeValue = hashLdapPassword(icfAttributeValue);
         }
         return wrapInLdapValueClass(ldapAttributeType, icfAttributeValue);

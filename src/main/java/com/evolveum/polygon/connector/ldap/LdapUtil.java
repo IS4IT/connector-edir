@@ -69,7 +69,7 @@ public class LdapUtil {
     private static final long WINDOWS_EPOCH_OFFSET = 116444736000000000L;
 
     public static boolean isDnAttribute(String attributeName) {
-        return LdapConfiguration.PSEUDO_ATTRIBUTE_DN_NAME.equals(attributeName);
+        return AbstractLdapConfiguration.PSEUDO_ATTRIBUTE_DN_NAME.equals(attributeName);
     }
 
     public static boolean isEntryUuidAttribute(String attributeName) {
