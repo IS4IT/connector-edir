@@ -149,10 +149,9 @@ public class TestEDirectory {
     }
 
     /**
-     * Covers {@code extendConnectorObject(ConnectorObjectBuilder, Entry, String)} — the
-     * hook whose signature this fork changed relative to upstream. A freshly created
-     * account has neither loginDisabled nor lockedByIntruder set, and the hook has to
-     * synthesise __ENABLE__=true and __LOCK_OUT__=false from their absence.
+     * Covers the {@code extendConnectorObject} hook: a freshly created account has neither
+     * loginDisabled nor lockedByIntruder set, and the hook has to synthesise
+     * __ENABLE__=true and __LOCK_OUT__=false from their absence.
      */
     @Test
     public void test020ExtendConnectorObject() {

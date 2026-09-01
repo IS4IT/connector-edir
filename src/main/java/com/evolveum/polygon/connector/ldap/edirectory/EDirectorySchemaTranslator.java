@@ -45,7 +45,7 @@ public class EDirectorySchemaTranslator extends AbstractSchemaTranslator<EDirect
 	protected void extendObjectClassDefinition(ObjectClassInfoBuilder ocib,
 			org.apache.directory.api.ldap.model.schema.ObjectClass ldapObjectClass) {
 		super.extendObjectClassDefinition(ocib, ldapObjectClass);
-		if (isUserObjectClass(ldapObjectClass.getName())) {
+		if (isUserObjectClass(ldapObjectClass)) {
 			AttributeInfoBuilder lockoutAb = new AttributeInfoBuilder(OperationalAttributes.LOCK_OUT_NAME);
 			lockoutAb.setType(boolean.class);
 //			lockoutAb.setReturnedByDefault(false);
@@ -85,11 +85,12 @@ public class EDirectorySchemaTranslator extends AbstractSchemaTranslator<EDirect
 	}
 
 	@Override
-	protected void extendConnectorObject(ConnectorObjectBuilder cob, Entry entry, String objectClassName) {
-		super.extendConnectorObject(cob, entry, objectClassName);
+	protected void extendConnectorObject(ConnectorObjectBuilder cob, Entry entry,
+			org.apache.directory.api.ldap.model.schema.ObjectClass ldapObjectClass) {
+		super.extendConnectorObject(cob, entry, ldapObjectClass);
 		Boolean ldapDisabled = LdapUtil.getBooleanAttribute(entry, EDirectoryConstants.ATTRIBUTE_LOGIN_DISABLED_NAME, null);
 		if (ldapDisabled == null) {
-			if (isUserObjectClass(objectClassName)) {
+			if (isUserObjectClass(ldapObjectClass)) {
 				cob.addAttribute(OperationalAttributes.ENABLE_NAME, Boolean.TRUE);
 			}
 		} else {
@@ -114,8 +115,19 @@ public class EDirectorySchemaTranslator extends AbstractSchemaTranslator<EDirect
 		}
 	}
 
-	public boolean isUserObjectClass(String ldapObjectClass) {
-		return getConfiguration().getUserObjectClass().equals(ldapObjectClass);
+	/**
+	 * Superior object classes count too: eDirectory trees routinely define their own user
+	 * class derived from the configured one, and an exact name match would not see it as a
+	 * user — so __ENABLE__ and __LOCK_OUT__ would never be attached to it.
+	 */
+	public boolean isUserObjectClass(org.apache.directory.api.ldap.model.schema.ObjectClass ldapObjectClass) {
+		if (ldapObjectClass == null) {
+			return false;
+		}
+		if (getConfiguration().getUserObjectClass().equals(ldapObjectClass.getName())) {
+			return true;
+		}
+		return ldapObjectClass.getSuperiors().stream().anyMatch(this::isUserObjectClass);
 	}
 
 	public boolean isGroupObjectClass(String ldapObjectClass) {
