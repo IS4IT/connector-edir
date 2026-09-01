@@ -1,0 +1,299 @@
+# Copyright (c) 2026 IS4IT
+#
+# SPDX-License-Identifier: Apache-2.0
+
+# Test rig for the eDirectory connector: an eDirectory tree to run the connector
+# against, plus a midPoint server to verify the connector bundle is discovered
+# and a resource can be configured against it.
+#
+# Usage (from project root):
+#   docker compose -f docker/docker-compose.yml up -d edir      # eDirectory only (slow first boot)
+#   docker compose -f docker/docker-compose.yml up -d           # everything
+#   # GUI:   http://localhost:20080/midpoint          (administrator / see .env)
+#   # REST:  http://localhost:20080/midpoint/ws/rest/...
+#   # LDAPS: ldaps://localhost:20636
+#   docker compose -f docker/docker-compose.yml logs -f edir
+#   docker compose -f docker/docker-compose.yml stop       # stop, keep everything
+#   docker compose -f docker/docker-compose.yml down       # remove containers, keep the tree
+#   docker compose -f docker/docker-compose.yml down -v    # discard the tree too
+#
+# Test data is retained between runs for inspection; the next run purges it. The tree
+# lives in the edir_config volume and survives `down`; coming back up then takes seconds
+# instead of the ~10 minute first build. See docker/README.md, "Data lifecycle".
+#
+# The eDirectory image is licensed and lives in a private registry: `docker login
+# hub.is4it.de` first. It is linux/amd64 only, so on Apple Silicon it runs under
+# emulation — the first boot (tree creation) takes a while.
+#
+# To test a freshly built connector:
+#   mvn package && cp target/connector-*.jar docker/connectors/    (NOT the -sources jar)
+#   docker compose -f docker/docker-compose.yml restart mp_server
+
+# Pin the Compose project name so containers, volumes and the network are always
+# prefixed connector_edirectory_* regardless of the directory the file is invoked from.
+name: connector_edirectory
+
+services:
+
+  # eDirectory. Configuration is passed entirely through `environment:` rather than a
+  # mounted silent.properties file: the image's /startidm.sh replaces the properties
+  # file with a dump of the container environment whenever INSTALL_ENGINE is set (the
+  # test is `-z`, emptiness, not truthiness), and only environment entries interpolate
+  # from .env — which is what makes the ports configurable.
+  edir:
+    image: ${EDIR_IMAGE}
+    platform: linux/amd64
+    # eDirectory needs a long, clean shutdown; killing it early can damage the DIB.
+    stop_grace_period: 300s
+    hostname: edir
+    environment:
+      TZ: ${TZ:-Europe/Berlin}
+      DOCKER_CONTAINER: "y"
+      debug: "n"
+
+      # Identity Vault plus the IDM engine, which is what brings in the DirXML-*
+      # schema. The connector itself needs none of it — it touches base eDirectory
+      # schema only (loginDisabled, lockedByIntruder, loginIntruderResetTime,
+      # groupMembership, equivalentToMe, securityEquals, GUID and the Novell syntaxes
+      # under 2.16.840.1.113719.1.1.5.1) — but a tree carrying DirXML-Associations and
+      # friends is the realistic shape for migrating off NetIQ IDM onto midPoint.
+      #
+      # INSTALL_ENGINE is read as presence, not as a value: /startidm.sh tests it with
+      # `-z`, so "false" still selects the engine. Left as "true" to say what happens.
+      # The web tiers stay off; they are weight this rig has no use for.
+      INSTALL_IDVAULT: "true"
+      INSTALL_ENGINE: "true"
+      INSTALL_UA: "false"
+      INSTALL_OSP: "false"
+      INSTALL_SSPR: "false"
+      INSTALL_ACTIVEMQ: "false"
+      IS_ADVANCED_EDITION: "false"
+      EDIRAPI_PROMPT_NEEDED: "n"
+      UPGRADE_IDM: "n"
+      AZURE_CLOUD: "n"
+
+      TREE_CONFIG: newtree
+      # Must resolve to an address that is actually up on one of this container's own
+      # interfaces: ndsconfig binds NDAP to it and reports "Specified interface ... is
+      # either invalid or it is not up" otherwise. Hence the static IP and the matching
+      # extra_hosts entry below.
+      ID_VAULT_HOST: edir.test.local
+      ID_VAULT_SERVERNAME: edir
+      ID_VAULT_TREENAME: ${EDIR_TREENAME:-CONNTEST}
+      ID_VAULT_SERVER_CONTEXT: servers.system
+      ID_VAULT_ADMIN_LDAP: ${EDIR_ADMIN_DN:-cn=admin,ou=sa,o=system}
+      ID_VAULT_PASSWORD: ${EDIR_PASSWORD}
+      IS_COMMON_PASSWORD: "y"
+      COMMON_PASSWORD: ${EDIR_PASSWORD}
+      ID_VAULT_VARDIR: /var/opt/novell/eDirectory
+      ID_VAULT_DIB: /var/opt/novell/eDirectory/data/dib
+      ID_VAULT_CONF: /etc/opt/novell/eDirectory/conf/nds.conf
+      ID_VAULT_RSA_KEYSIZE: "4096"
+      ID_VAULT_EC_CURVE: P384
+      ID_VAULT_CA_LIFE: "10"
+
+      # Ports the server itself listens on. Published 1:1 below, so what the logs say
+      # and what the tests connect to are the same number.
+      ID_VAULT_NCP_PORT: ${EDIR_NCP_PORT:-20524}
+      ID_VAULT_LDAP_PORT: ${EDIR_LDAP_PORT:-20389}
+      ID_VAULT_LDAPS_PORT: ${EDIR_LDAPS_PORT:-20636}
+      ID_VAULT_HTTP_PORT: ${EDIR_HTTP_PORT:-20828}
+      ID_VAULT_HTTPS_PORT: ${EDIR_HTTPS_PORT:-20830}
+    ports:
+      # Loopback only. NCP is deliberately not published: nothing outside the container
+      # needs it, and it is the tree's replication/management channel.
+      - "127.0.0.1:${EDIR_LDAP_PORT:-20389}:${EDIR_LDAP_PORT:-20389}"
+      - "127.0.0.1:${EDIR_LDAPS_PORT:-20636}:${EDIR_LDAPS_PORT:-20636}"
+      - "127.0.0.1:${EDIR_HTTP_PORT:-20828}:${EDIR_HTTP_PORT:-20828}"
+      - "127.0.0.1:${EDIR_HTTPS_PORT:-20830}:${EDIR_HTTPS_PORT:-20830}"
+    healthcheck:
+      # Both halves are needed.
+      #
+      # /config/idm/version.properties is the configuration-complete marker —
+      # /startidm.sh copies it in only once configuration has finished. It is also what
+      # the container looks for on a later start to decide whether it is already
+      # configured, so a container stopped before it appears is unrecoverable ("User
+      # credentials are invalid") and has to be wiped and rebuilt.
+      #
+      # The second half has to be a real LDAP query, not a port check. The port opens
+      # well before eDirectory services requests — both while the installer restarts the
+      # Identity Vault at the end of configuration, and for a minute or so after any
+      # ordinary restart. A dependent starting in that window fails with "Can't contact
+      # LDAP server". An anonymous root DSE read needs no credentials; TLS validation is
+      # off because the tree serves its own self-signed certificate.
+      test: ["CMD-SHELL", "test -f /config/idm/version.properties && LDAPTLS_REQCERT=never /opt/novell/eDirectory/bin/ldapsearch -x -H ldaps://127.0.0.1:${EDIR_LDAPS_PORT:-20636} -b '' -s base -LLL supportedLDAPVersion >/dev/null 2>&1"]
+      interval: 15s
+      timeout: 5s
+      # First boot has to create the tree, under emulation on arm64. Allow ~40 minutes
+      # before the container is called unhealthy.
+      retries: 5
+      start_period: 40m
+    domainname: test.local
+    extra_hosts:
+      edir.test.local: ${EDIR_IP:-172.28.20.2}
+    networks:
+      net:
+        ipv4_address: ${EDIR_IP:-172.28.20.2}
+    volumes:
+      # Same set as idm-compose stack/07. /config carries the whole tree: the container's
+      # own scripts put eDirectory's data under /config/idm/eDirectory_data and expose it
+      # at the legacy path too, so /var/opt/novell/eDirectory/data/dib and
+      # /config/idm/eDirectory_data/data/dib are the same inode. The DIB, nds.conf and
+      # the version.properties completion marker therefore all live in edir_config, and
+      # the tree survives `docker compose down` — only `down -v` discards it.
+      #
+      # Do not add a volume for /var/opt/novell/eDirectory: it collides with that
+      # arrangement and makes ndsconfig fail ("Command socket error") before it can
+      # create the DIB.
+      - edir_config:/config
+      - edir_trace:/var/log/idm
+      - edir_cache:/var/idm/cache
+
+  # One-shot: create the o=data test tree once eDirectory answers on LDAPS.
+  #
+  # Uses stock openldap-clients rather than the eDirectory image's own tooling, so the
+  # seed step does not depend on what the licensed image happens to ship. `-c` makes it
+  # continue past "already exists", which keeps re-runs harmless.
+  #
+  # The LDIF is inlined rather than mounted from a file on purpose: this rig is expected
+  # to run under colima, whose VM does not see every host path, and a bind mount of an
+  # unshared path silently appears in the container as an empty directory rather than
+  # failing. Neither of the reference stacks (midpoint-diff, idm-compose) uses a bind
+  # mount either — named volumes only.
+  edir_seed:
+    image: alpine:${ALPINE_VER:-3.20}
+    depends_on:
+      edir:
+        condition: service_healthy
+    environment:
+      LDAPTLS_REQCERT: never
+      EDIR_URL: ldaps://edir:${EDIR_LDAPS_PORT:-20636}
+      EDIR_ADMIN_DN: ${EDIR_ADMIN_DN:-cn=admin,ou=sa,o=system}
+      EDIR_PASSWORD: ${EDIR_PASSWORD}
+    command:
+      - sh
+      - -c
+      - |
+        set -e
+        apk add --no-cache openldap-clients >/dev/null
+        cat >/tmp/seed.ldif <<'LDIF'
+        dn: o=data
+        objectClass: organization
+        o: data
+
+        dn: ou=users,o=data
+        objectClass: organizationalUnit
+        ou: users
+
+        dn: ou=groups,o=data
+        objectClass: organizationalUnit
+        ou: groups
+        LDIF
+        # -c continues past individual failures; 68 is entryAlreadyExists, which is the
+        # normal result of re-seeding an existing tree and not an error here.
+        ldapadd -c -x -H "$$EDIR_URL" -D "$$EDIR_ADMIN_DN" -w "$$EDIR_PASSWORD" -f /tmp/seed.ldif \
+          || { rc=$$?; [ "$$rc" -eq 68 ] && echo "o=data already present"; exit $$([ "$$rc" -eq 68 ] && echo 0 || echo "$$rc"); }
+    networks:
+      net:
+        ipv4_address: ${SEED_IP:-172.28.20.40}
+
+  mp_data:
+    image: postgres:${PG_VER:-17}-alpine
+    environment:
+      - POSTGRES_PASSWORD=${MP_DB_PASSWORD}
+      - POSTGRES_USER=midpoint
+      - POSTGRES_INITDB_ARGS=--lc-collate=en_US.utf8 --lc-ctype=en_US.utf8
+    networks:
+      net:
+        ipv4_address: ${MP_DATA_IP:-172.28.20.21}
+    volumes:
+      - mp_data:/var/lib/postgresql/data
+    # PostgreSQL is intentionally not published on the host (use `compose exec mp_data
+    # psql ...` for inspection) so concurrent test rigs don't clash.
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U midpoint"]
+      interval: 5s
+      timeout: 3s
+      retries: 20
+
+  # One-shot: create the native PostgreSQL repository + audit schema if absent.
+  mp_init:
+    image: evolveum/midpoint:${MP_VER:-4.10.3}
+    command: >
+      bash -c "
+      cd /opt/midpoint ;
+      bin/midpoint.sh init-native ;
+      echo ' - - - - - - ' ;
+      bin/ninja.sh -B info >/dev/null 2>/tmp/ninja.log ;
+      grep -q \"ERROR\" /tmp/ninja.log && (
+      bin/ninja.sh run-sql --create --mode REPOSITORY  ;
+      bin/ninja.sh run-sql --create --mode AUDIT
+      ) ||
+      echo -e '\\n Repository init is not needed...' ;
+      "
+    depends_on:
+      mp_data:
+        condition: service_healthy
+    environment:
+      - MP_SET_midpoint_repository_jdbcUsername=midpoint
+      - MP_SET_midpoint_repository_jdbcPassword=${MP_DB_PASSWORD}
+      - MP_SET_midpoint_repository_jdbcUrl=jdbc:postgresql://mp_data:5432/midpoint
+      - MP_SET_midpoint_repository_database=postgresql
+      - MP_INIT_CFG=/opt/midpoint/var
+    networks:
+      net:
+        ipv4_address: ${MP_INIT_IP:-172.28.20.22}
+    volumes:
+      - mp_home:/opt/midpoint/var
+
+  mp_server:
+    image: evolveum/midpoint:${MP_VER:-4.10.3}
+    depends_on:
+      mp_init:
+        condition: service_completed_successfully
+      mp_data:
+        condition: service_healthy
+    command: ["/opt/midpoint/bin/midpoint.sh", "container"]
+    ports:
+      # Loopback only: this rig runs with the administrator password from .env, and
+      # publishing on every interface serves an admin-credentialed midPoint to whatever
+      # network the laptop is on.
+      - "127.0.0.1:${MP_PORT:-20080}:8080"
+    environment:
+      - MP_SET_midpoint_administrator_initialPassword=${MP_ADMIN_PASSWORD}
+      - MP_SET_midpoint_repository_jdbcUsername=midpoint
+      - MP_SET_midpoint_repository_jdbcPassword=${MP_DB_PASSWORD}
+      - MP_SET_midpoint_repository_jdbcUrl=jdbc:postgresql://mp_data:5432/midpoint
+      - MP_SET_midpoint_repository_database=postgresql
+      - MP_UNSET_midpoint_repository_hibernateHbm2ddl=1
+      - MP_NO_ENV_COMPAT=1
+    networks:
+      net:
+        ipv4_address: ${MP_SERVER_IP:-172.28.20.20}
+    volumes:
+      - mp_home:/opt/midpoint/var
+      # Connector bundles under test. A named volume rather than a bind mount of target/,
+      # for two reasons: bind mounts are unreliable here (see edir_seed), and
+      # maven-source-plugin also produces connector-*-sources.jar, which ConnId would try
+      # to parse as a bundle manifest and fail on at startup. Stage jars into it with
+      # `docker compose cp` — see docker/README.md.
+      - mp_connectors:/opt/midpoint/var/icf-connectors
+
+networks:
+  net:
+    driver: bridge
+    # Explicit subnet so eDirectory can be pinned to a known address; see ID_VAULT_HOST.
+    # Every service gets a static address, as idm-compose does: with a dynamic pool
+    # Docker hands .2 to whichever container it creates first and eDirectory then fails
+    # to start with "Address already in use".
+    ipam:
+      config:
+        - subnet: ${EDIR_SUBNET:-172.28.20.0/24}
+
+volumes:
+  edir_config:
+  edir_trace:
+  edir_cache:
+  mp_data:
+  mp_home:
+  mp_connectors:

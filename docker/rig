@@ -1,0 +1,141 @@
+#!/bin/bash
+#
+# Copyright (c) 2026 IS4IT
+#
+# SPDX-License-Identifier: Apache-2.0
+#
+# Test rig control for the eDirectory connector.
+#
+# `docker compose up` alone is not enough to bring up an eDirectory tree: the vendor
+# image restarts the Identity Vault part way through configuration and can wedge on a
+# known prompt race, neither of which a compose healthcheck can recover from. This is a
+# much reduced relative of ../idm-compose/idm-compose, which solves the same problems for
+# the full IDM stack.
+#
+# Usage:
+#   docker/rig init      bring everything up, wait for the tree, seed o=data
+#   docker/rig seed      (re-)create the o=data containers
+#   docker/rig deploy    build the connector and load it into midPoint
+#   docker/rig status    what is running, and how to reach it
+#   docker/rig stop      stop containers, keeping the tree
+#   docker/rig down      remove containers, keeping the tree
+#   docker/rig wipe      remove everything including the tree
+#
+# Anything else is passed straight to `docker compose`, e.g. `docker/rig logs -f edir`.
+
+set -euo pipefail
+
+cd "$(dirname "$0")/.."
+COMPOSE=(docker compose -f docker/docker-compose.yml)
+
+[[ -f docker/.env ]] || { echo "docker/.env missing — copy docker/.env.example and edit it."; exit 1; }
+# shellcheck disable=SC1091
+set -a; . docker/.env; set +a
+
+EDIR_LDAPS_PORT="${EDIR_LDAPS_PORT:-20636}"
+EDIR_ADMIN_DN="${EDIR_ADMIN_DN:-cn=admin,ou=sa,o=system}"
+MP_PORT="${MP_PORT:-20080}"
+
+# eDirectory only knows it is configured once /startidm.sh has copied this in. A
+# container stopped before that point cannot be restarted — it comes back up with
+# "User credentials are invalid" and has to be rebuilt from scratch.
+READY_MARKER=/config/idm/version.properties
+
+green() { printf '\033[0;32m%s\033[0m\n' "$1"; }
+bold()  { printf '\033[1m%s\033[0m\n' "$1"; }
+die()   { printf '\033[0;31m%s\033[0m\n' "$1" >&2; exit 1; }
+
+edir_configured() {
+    "${COMPOSE[@]}" exec -T edir test -f "$READY_MARKER" 2>/dev/null
+}
+
+# The vendor image intermittently wedges during configuration with "Could not find
+# prompt ID" in its log. idm-compose clears the log and restarts the container; there is
+# no better remedy. Returns 0 when it applied the workaround.
+recover_prompt_race() {
+    "${COMPOSE[@]}" exec -T edir test -f /config/idm/log/idmconfigure.log 2>/dev/null || return 1
+    "${COMPOSE[@]}" exec -T edir grep -q "Could not find prompt ID" /config/idm/log/idmconfigure.log 2>/dev/null || return 1
+    echo
+    bold "Hit the 'Could not find prompt ID' race — clearing the log and restarting eDirectory."
+    "${COMPOSE[@]}" exec -T edir sh -c ": > /config/idm/log/idmconfigure.log"
+    "${COMPOSE[@]}" restart --no-deps edir
+    return 0
+}
+
+wait_for_edir() {
+    printf 'Waiting for eDirectory to configure (first run takes ~10 min under emulation)'
+    local waited=0 limit=$(( 60 * 60 ))
+    until edir_configured; do
+        recover_prompt_race && waited=0
+        (( waited >= limit )) && { echo; die "eDirectory did not finish configuring within $(( limit / 60 )) minutes. Check: docker/rig logs edir"; }
+        printf '.'; sleep 10; waited=$(( waited + 10 ))
+    done
+    echo; green "eDirectory is configured."
+}
+
+cmd_seed() {
+    # --exit-code-from is what makes a failing seed fail this command: plain `up` reports
+    # success as long as it managed to start the container, whatever the container did.
+    "${COMPOSE[@]}" up --exit-code-from edir_seed edir_seed || die "Seeding o=data failed."
+    green "o=data seeded."
+}
+
+cmd_init() {
+    "${COMPOSE[@]}" up -d edir mp_data mp_init mp_server
+    wait_for_edir
+    cmd_seed
+    cmd_status
+}
+
+cmd_deploy() {
+    mvn -q package -DskipTests
+    # Only the bundle. maven-source-plugin also builds connector-*-sources.jar, which
+    # ConnId would try to parse as a bundle manifest and fail on at startup.
+    local jar
+    jar=$(ls target/connector-*.jar | grep -v -- '-sources' | head -n1)
+    [[ -n "$jar" ]] || die "No connector jar in target/."
+    bold "Deploying $jar"
+    "${COMPOSE[@]}" cp "$jar" mp_server:/opt/midpoint/var/icf-connectors/
+    "${COMPOSE[@]}" restart mp_server
+    green "Deployed. midPoint is restarting."
+}
+
+cmd_status() {
+    "${COMPOSE[@]}" ps
+    echo
+    echo "  LDAPS    ldaps://localhost:${EDIR_LDAPS_PORT}  as ${EDIR_ADMIN_DN}"
+    echo "  iMonitor https://localhost:${EDIR_HTTPS_PORT:-20830}/nds"
+    echo "  midPoint http://localhost:${MP_PORT}/midpoint  as administrator"
+    echo
+    echo "Test data under o=data is kept for inspection; the next test run purges it."
+}
+
+cmd_stop() {
+    "${COMPOSE[@]}" stop
+    green "Stopped. 'docker/rig init' brings it back."
+}
+
+cmd_down() {
+    # Safe: the tree lives in the edir_config volume, not in the container.
+    "${COMPOSE[@]}" down --remove-orphans
+    green "Containers removed. The tree is intact — 'docker/rig init' brings it back in seconds."
+}
+
+cmd_wipe() {
+    read -r -p "Delete all containers and volumes, including the eDirectory tree? [y/N] "
+    [[ $REPLY =~ ^[yY] ]] || exit 0
+    "${COMPOSE[@]}" down -v --remove-orphans
+    green "Wiped."
+}
+
+case "${1:-}" in
+    init)   shift; cmd_init "$@" ;;
+    seed)   shift; cmd_seed "$@" ;;
+    deploy) shift; cmd_deploy "$@" ;;
+    status) shift; cmd_status "$@" ;;
+    stop)   shift; cmd_stop "$@" ;;
+    down)   shift; cmd_down "$@" ;;
+    wipe)   shift; cmd_wipe "$@" ;;
+    "")     cmd_status ;;
+    *)      "${COMPOSE[@]}" "$@" ;;
+esac

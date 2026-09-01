@@ -19,3 +19,6 @@ hs_err_pid*
 
 .idea
 *.iml
+
+# Test rig: holds passwords and the private-registry image reference.
+docker/.env
