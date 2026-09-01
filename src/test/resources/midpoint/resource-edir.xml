@@ -1,0 +1,64 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!--
+  ~ Copyright (c) 2026 IS4IT
+  ~
+  ~ Licensed under the Apache License, Version 2.0 (the "License");
+  ~ you may not use this file except in compliance with the License.
+  ~ You may obtain a copy of the License at
+  ~
+  ~     https://www.apache.org/licenses/LICENSE-2.0
+  ~
+  ~ Unless required by applicable law or agreed to in writing, software
+  ~ distributed under the License is distributed on an "AS IS" BASIS,
+  ~ WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+  ~ See the License for the specific language governing permissions and
+  ~ limitations under the License.
+  -->
+<!--
+  midPoint resource for TestMidPointIntegration. The ${...} placeholders are substituted
+  by the test from the test.edir.* system properties.
+
+  Note the cfg namespace: midPoint derives it from the connector bundle name and the
+  connector class, as
+      .../icf-1/bundle/{ConnectorBundle-Name}/{connectorType}
+  Renaming the Maven artifactId changes ConnectorBundle-Name and therefore this
+  namespace, which is what makes such a rename a migration for every existing resource.
+  TestMidPointIntegration asserts that the deployed connector still matches it.
+-->
+<resource xmlns="http://midpoint.evolveum.com/xml/ns/public/common/common-3"
+          xmlns:c="http://midpoint.evolveum.com/xml/ns/public/common/common-3"
+          xmlns:q="http://prism.evolveum.com/xml/ns/public/query-3"
+          xmlns:icfc="http://midpoint.evolveum.com/xml/ns/public/connector/icf-1/connector-schema-3"
+          oid="${oid}">
+
+    <name>eDirectory (connector test rig)</name>
+    <description>Created by TestMidPointIntegration. Safe to delete.</description>
+
+    <connectorRef type="c:ConnectorType">
+        <filter>
+            <q:equal>
+                <q:path>c:connectorType</q:path>
+                <q:value>com.evolveum.polygon.connector.ldap.edirectory.EDirectoryLdapConnector</q:value>
+            </q:equal>
+        </filter>
+    </connectorRef>
+
+    <connectorConfiguration>
+        <icfc:configurationProperties
+                xmlns:cfg="http://midpoint.evolveum.com/xml/ns/public/connector/icf-1/bundle/${bundle}/com.evolveum.polygon.connector.ldap.edirectory.EDirectoryLdapConnector">
+            <cfg:host>${host}</cfg:host>
+            <cfg:port>${port}</cfg:port>
+            <cfg:connectionSecurity>${connectionSecurity}</cfg:connectionSecurity>
+            <cfg:authenticationType>simple</cfg:authenticationType>
+            <cfg:bindDn>${bindDn}</cfg:bindDn>
+            <cfg:bindPassword>
+                <clearValue>${bindPassword}</clearValue>
+            </cfg:bindPassword>
+            <cfg:baseContext>${baseContext}</cfg:baseContext>
+            <cfg:allowUntrustedSsl>true</cfg:allowUntrustedSsl>
+            <cfg:pagingStrategy>spr</cfg:pagingStrategy>
+            <cfg:synchronizationStrategy>modifyTimestamp</cfg:synchronizationStrategy>
+        </icfc:configurationProperties>
+    </connectorConfiguration>
+
+</resource>
