@@ -372,14 +372,16 @@ public class EDirectoryLdapConnector extends AbstractLdapConnector<EDirectoryLda
 
     /**
      * Creates an error handler for eDirectory LDAP operations.
-     * 
-     * @return an ErrorHandler instance, or null if no custom error handling is needed
+     *
+     * @return an ErrorHandler instance
      */
     @Override
 	protected ErrorHandler createErrorHandler()
 	{
-		// TODO Auto-generated method stub
-		return null;
+		// Must not be null: the connector passes this to every search strategy, which
+		// dereferences it whenever it has to turn an LDAP result or exception into a
+		// ConnId one. eDirectory needs no special mapping beyond the generic handler.
+		return new ErrorHandler();
 	}
     
 }
