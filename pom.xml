@@ -60,16 +60,6 @@
             <name>Apache Snapshots</name>
             <url>https://repository.apache.org/snapshots/</url>
         </repository>
-        <!--
-        We need this for Sleepycat JE, version 5.0.73 is released OK, but newer versions
-        (like 5.0.103) is in Maven central plugin repository, which is obviously wrong.
-        So we need Oracle's repo too.
-        -->
-        <repository>
-            <id>oracle</id>
-            <name>Oracle</name>
-            <url>https://download.oracle.com/maven/</url>
-        </repository>
     </repositories>
 
     <build>
@@ -176,36 +166,6 @@
             <groupId>org.slf4j</groupId>
             <artifactId>slf4j-simple</artifactId>
             <version>2.0.17</version>
-            <scope>test</scope>
-        </dependency>
-
-        <dependency>
-            <groupId>commons-io</groupId>
-            <artifactId>commons-io</artifactId>
-            <version>2.15.1</version>
-            <scope>test</scope>
-        </dependency>
-
-        <dependency>
-            <groupId>org.forgerock.opendj</groupId>
-            <artifactId>opendj</artifactId>
-            <version>2.6.2</version>
-            <scope>test</scope>
-        </dependency>
-
-        <dependency>
-            <groupId>org.forgerock.opendj</groupId>
-            <artifactId>opendj-ldap-sdk</artifactId>
-            <version>2.6.2</version>
-            <scope>test</scope>
-        </dependency>
-
-        <!-- Needed for OpenDJ in tests -->
-        <dependency>
-            <groupId>com.sleepycat</groupId>
-            <artifactId>je</artifactId>
-            <version>5.0.103</version>
-            <!-- upgrade to 18.x is not possible with currently used OpenDJ -->
             <scope>test</scope>
         </dependency>
 
