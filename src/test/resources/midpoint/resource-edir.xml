@@ -34,12 +34,24 @@
     <name>eDirectory (connector test rig)</name>
     <description>Created by TestMidPointIntegration. Safe to delete.</description>
 
+    <!--
+      Matching on connectorType alone is not enough once the bundle has been renamed: a
+      ConnectorType object for the old bundle can still be sitting in the repository with
+      the very same connectorType value, and the filter would be ambiguous between them.
+      The bundle name pins it to the jar actually deployed.
+    -->
     <connectorRef type="c:ConnectorType">
         <filter>
-            <q:equal>
-                <q:path>c:connectorType</q:path>
-                <q:value>com.evolveum.polygon.connector.ldap.edirectory.EDirectoryLdapConnector</q:value>
-            </q:equal>
+            <q:and>
+                <q:equal>
+                    <q:path>c:connectorType</q:path>
+                    <q:value>com.evolveum.polygon.connector.ldap.edirectory.EDirectoryLdapConnector</q:value>
+                </q:equal>
+                <q:equal>
+                    <q:path>c:connectorBundle</q:path>
+                    <q:value>${bundle}</q:value>
+                </q:equal>
+            </q:and>
         </filter>
     </connectorRef>
 

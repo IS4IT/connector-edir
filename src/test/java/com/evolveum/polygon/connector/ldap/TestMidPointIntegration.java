@@ -94,7 +94,7 @@ public class TestMidPointIntegration {
      * renamed; the failure of {@link #test000ConnectorIsDiscovered()} is the reminder
      * that every deployed resource needs its namespace migrated too.
      */
-    private static final String EXPECTED_BUNDLE = "com.evolveum.polygon.connector-ldap";
+    private static final String EXPECTED_BUNDLE = "com.evolveum.polygon.connector-edir";
 
     private static final String NAMESPACE_PREFIX =
             "http://midpoint.evolveum.com/xml/ns/public/connector/icf-1/bundle/";
@@ -151,9 +151,11 @@ public class TestMidPointIntegration {
 
     /**
      * ConnId keys connector bundles on name plus version and refuses to load two that
-     * collide ({@code WorkingBundleInfo.ensureBundlesAreUnique}). The midPoint image
-     * ships Evolveum's own connector-ldap under exactly the bundle name this fork uses,
-     * so today only the version suffix keeps the two jars apart.
+     * collide ({@code WorkingBundleInfo.ensureBundlesAreUnique}). This fork used to ship as
+     * {@code com.evolveum.polygon.connector-ldap}, the same bundle name as the
+     * connector-ldap Evolveum bundles into the midPoint image, with only the version suffix
+     * keeping the two jars apart. Renaming the artifact to connector-edir gave it an
+     * identity of its own; this guards that it stays that way.
      *
      * A bundle legitimately contains several connector classes — Evolveum's exposes both
      * LdapConnector and AdLdapConnector at one name and version — so the invariant is not

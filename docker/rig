@@ -88,13 +88,20 @@ cmd_init() {
 }
 
 cmd_deploy() {
-    mvn -q package -DskipTests
+    # `clean` matters: target/ otherwise keeps jars from before an artifact rename, and the
+    # glob below would have to guess which one was meant.
+    mvn -q clean package -DskipTests
     # Only the bundle. maven-source-plugin also builds connector-*-sources.jar, which
     # ConnId would try to parse as a bundle manifest and fail on at startup.
     local jar
     jar=$(ls target/connector-*.jar | grep -v -- '-sources' | head -n1)
     [[ -n "$jar" ]] || die "No connector jar in target/."
     bold "Deploying $jar"
+    # Clear previous bundles first. After an artifact rename the old and new jars would
+    # otherwise sit here together, both providing EDirectoryLdapConnector under different
+    # bundle names — not a ConnId collision, but midPoint then offers two eDirectory
+    # connectors and a resource can bind to the stale one.
+    "${COMPOSE[@]}" exec -T mp_server sh -c 'rm -f /opt/midpoint/var/icf-connectors/connector-*.jar'
     "${COMPOSE[@]}" cp "$jar" mp_server:/opt/midpoint/var/icf-connectors/
     "${COMPOSE[@]}" restart mp_server
     green "Deployed. midPoint is restarting."
