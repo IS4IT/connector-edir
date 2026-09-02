@@ -1,0 +1,71 @@
+# Settings for the live integration tests (TestEDirectory, TestMidPointIntegration).
+#
+# Copy this file to "test.properties" in the same directory (src/test/resources) and edit
+# it. "test.properties" is git-ignored on purpose - it holds credentials and must NOT be
+# committed. When it is absent, both live suites are skipped, so a plain `mvn test` stays
+# green without a server.
+#
+# The file is read from the test classpath, so it works the same way from an IDE as from
+# the command line - no run configuration and no -D flags needed. A system property still
+# wins over a value here, so a single setting can be overridden for one run:
+#
+#   mvn test -Dtest.edir.port=1636
+#
+# The values below describe the docker test rig (see docker/README.md) and work unedited
+# against it. Point them anywhere else to test against an existing eDirectory or midPoint;
+# the two are independent, so an existing directory can be used with the rig's midPoint and
+# the other way round.
+#
+# What the tests do to the target:
+#   - create and delete users and groups in the two containers configured below, so the
+#     bind user needs write access there
+#   - create or replace one midPoint resource, at test.midpoint.resourceOid
+# Objects are named test-<purpose>-<runId> and are left behind for inspection; the next run
+# removes the previous run's leftovers from those two containers only.
+
+# --- eDirectory: connection (required) ----------------------------------------
+
+test.edir.host=127.0.0.1
+test.edir.port=20636
+# none | ssl | starttls. The rig refuses simple binds on the plaintext port, so ssl it is.
+test.edir.connectionSecurity=ssl
+test.edir.bindDn=cn=admin,ou=sa,o=system
+test.edir.bindPassword=n0v3ll
+test.edir.baseContext=o=data
+
+# --- eDirectory: what the tests use (optional) --------------------------------
+
+# Where test users and groups are created. Default: ou=users,<baseContext> and
+# ou=groups,<baseContext>. Set these when your tree is laid out differently - and note that
+# the cleanup of earlier runs is confined to exactly these two containers.
+#test.edir.usersContainer=ou=users,o=data
+#test.edir.groupsContainer=ou=groups,o=data
+
+# Object classes to exercise. Default: inetOrgPerson and groupOfNames. Set the user class
+# to your own if the tree defines one derived from inetOrgPerson - the connector resolves
+# superior classes, and this is how that gets tested.
+#test.edir.userObjectClass=inetOrgPerson
+#test.edir.groupObjectClass=groupOfNames
+
+# Password used for the accounts the tests create. Override if your password policy is
+# stricter than the default value satisfies.
+#test.edir.testPassword=Qwe.123.Rty.456
+
+# Set to false on a shared directory to leave earlier runs' objects alone. The cleanup is
+# already limited to test-* objects inside the two containers above.
+#test.edir.purgePreviousRuns=true
+
+# --- midPoint (required for TestMidPointIntegration) --------------------------
+
+test.midpoint.url=http://127.0.0.1:20080/midpoint
+test.midpoint.user=administrator
+test.midpoint.password=T3stPw890uio
+
+# How midPoint reaches eDirectory, which is usually not how this JVM reaches it: with the
+# rig, midPoint resolves the service name inside the compose network while the tests use
+# the published port on loopback. Default: test.edir.host / test.edir.port.
+test.midpoint.edir.host=edir
+#test.midpoint.edir.port=20636
+
+# OID of the resource the tests create. Change it if that OID is taken on your midPoint.
+#test.midpoint.resourceOid=c0ffee00-1111-4222-8333-000000000001

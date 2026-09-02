@@ -135,32 +135,32 @@ are all named volumes.
 
 ## Running the tests
 
-Both suites skip themselves when their properties are absent, so a plain `mvn test`
-stays green without a rig.
+The tests are configured by `src/test/resources/test.properties`, which is read off the
+test classpath. Copy the template once:
 
 ```bash
-# connector against eDirectory
-mvn test -Dtest.edir.host=127.0.0.1 \
-         -Dtest.edir.port=20636 \
-         -Dtest.edir.connectionSecurity=ssl \
-         -Dtest.edir.bindDn='cn=admin,ou=sa,o=system' \
-         -Dtest.edir.bindPassword=... \
-         -Dtest.edir.baseContext=o=data
-
-# midPoint over REST (needs the connector staged, see above)
-mvn test -Dtest.midpoint.url=http://127.0.0.1:20080/midpoint \
-         -Dtest.midpoint.user=administrator \
-         -Dtest.midpoint.password=... \
-         -Dtest.midpoint.edir.host=edir \
-         -Dtest.edir.host=127.0.0.1 \
-         -Dtest.edir.port=20636 \
-         -Dtest.edir.connectionSecurity=ssl \
-         -Dtest.edir.bindDn='cn=admin,ou=sa,o=system' \
-         -Dtest.edir.bindPassword=... \
-         -Dtest.edir.baseContext=o=data
+cp src/test/resources/test.properties.example src/test/resources/test.properties
 ```
 
-`test.midpoint.edir.host` is separate from `test.edir.host` because the two sides reach
-eDirectory differently: midPoint is inside the compose network and resolves the `edir`
-service name, while the test JVM is on the host and goes through the published port on
-loopback. It defaults to `test.edir.host` when both addresses are the same.
+Its defaults describe this rig, so it works unedited. Then run the tests however you like —
+`mvn test`, or straight from IntelliJ; there is nothing to configure in the IDE, which is
+the point of keeping the settings in a file rather than in `-D` flags. A system property
+still wins over the file for one-off overrides:
+
+```bash
+mvn test -Dtest.edir.port=1636
+```
+
+`test.properties` is gitignored, and the file is also how you point the tests at an
+existing eDirectory or midPoint instead of the rig — see the comments in the template. The
+two servers are independent, so an existing directory can be used with the rig's midPoint
+and the other way round. That is what `test.midpoint.edir.host` is for: midPoint is inside
+the compose network and resolves the `edir` service name, while the test JVM is on the host
+and goes through the published port on loopback.
+
+Both suites skip themselves when `test.properties` is absent **or** the servers it names
+cannot be reached, so a plain `mvn test` stays green without a rig. A server that answers
+and then refuses — a wrong password, say — fails the tests rather than skipping them.
+
+Note that the midPoint suite needs the connector staged into midPoint first
+(`docker/rig deploy`).

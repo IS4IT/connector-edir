@@ -22,3 +22,7 @@ hs_err_pid*
 
 # Test rig: holds passwords and the private-registry image reference.
 docker/.env
+
+# Live test settings: holds credentials for whatever server the tests point at.
+# Copy from test.properties.example.
+src/test/resources/test.properties

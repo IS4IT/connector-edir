@@ -52,19 +52,20 @@ import org.testng.annotations.Test;
  * {@link #test000ConnectorIsDiscovered()} asserts the deployed connector still matches
  * what {@code resource-edir.xml} declares.
  *
- * Requires the full rig (see docker/README.md) with the freshly built connector staged
- * into midPoint. Skips itself when the properties are absent:
+ * <p>Needs a midPoint with this connector deployed, and an eDirectory for it to talk to.
+ * Both are configured through {@code test.properties} on the test classpath — copy
+ * {@code test.properties.example} and edit it. The defaults describe the docker rig (see
+ * docker/README.md), but existing servers work just as well. The suite skips itself when
+ * the file is absent or either server cannot be reached.
  *
- * <pre>
- * mvn test -Dtest.midpoint.url=http://127.0.0.1:20080/midpoint \
- *          -Dtest.midpoint.user=administrator \
- *          -Dtest.midpoint.password=... \
- *          -Dtest.edir.host=edir -Dtest.edir.port=20636 ...
- * </pre>
+ * <p>It creates or replaces one resource, at {@code test.midpoint.resourceOid}, and one
+ * account in eDirectory.
  *
- * Note that {@code test.edir.host} must be reachable <em>from the midPoint container</em>
- * (the service name, {@code edir}), while the connector-level tests reach eDirectory from
- * the host. Both work here because the ports are published 1:1.
+ * <p>Note that midPoint has to reach eDirectory by its own route, which is not this JVM's:
+ * with the rig, midPoint resolves the {@code edir} service name inside the compose network
+ * while the tests go through the published port on loopback. That is what
+ * {@code test.midpoint.edir.host} is for; it defaults to {@code test.edir.host} when both
+ * sides use the same address.
  */
 public class TestMidPointIntegration {
 
@@ -99,15 +100,20 @@ public class TestMidPointIntegration {
     private static final String NAMESPACE_PREFIX =
             "http://midpoint.evolveum.com/xml/ns/public/connector/icf-1/bundle/";
 
-    /** Fixed so a re-run replaces the resource instead of accumulating copies. */
-    private static final String RESOURCE_OID = "c0ffee00-1111-4222-8333-000000000001";
-
-    private static final ObjectClass OC_USER = new ObjectClass("inetOrgPerson");
+    /**
+     * OID of the resource this suite creates. Fixed so a re-run replaces it instead of
+     * accumulating copies, and configurable via {@code test.midpoint.resourceOid} so it
+     * cannot collide with anything in a midPoint that is not the rig.
+     */
+    private static final String PROPERTY_RESOURCE_OID = "test.midpoint.resourceOid";
+    private static final String DEFAULT_RESOURCE_OID = "c0ffee00-1111-4222-8333-000000000001";
 
     private HttpClient http;
     private String baseUrl;
     private String authorization;
+    private String resourceOid;
 
+    private ObjectClass ocUser;
     private ConnectorFacade connector;
 
     @BeforeClass
@@ -115,16 +121,46 @@ public class TestMidPointIntegration {
         String[] missing = EDirTestSupport.missingProperties(
                 concat(MIDPOINT_PROPERTIES, EDirTestSupport.PROPERTIES));
         if (missing.length != 0) {
-            throw new SkipException("Missing properties for midPoint integration: " + Arrays.toString(missing));
+            throw new SkipException("Missing settings for the midPoint integration: " + Arrays.toString(missing)
+                    + " - copy test.properties.example to test.properties to run these tests");
         }
 
-        baseUrl = System.getProperty(PROPERTY_URL).replaceAll("/+$", "");
+        baseUrl = EDirTestSupport.property(PROPERTY_URL).replaceAll("/+$", "");
         authorization = "Basic " + Base64.getEncoder().encodeToString(
-                (System.getProperty(PROPERTY_USER) + ":" + System.getProperty(PROPERTY_PASSWORD))
+                (EDirTestSupport.property(PROPERTY_USER) + ":" + EDirTestSupport.property(PROPERTY_PASSWORD))
                         .getBytes(StandardCharsets.UTF_8));
         http = HttpClient.newHttpClient();
+        resourceOid = EDirTestSupport.property(PROPERTY_RESOURCE_OID, DEFAULT_RESOURCE_OID);
+        ocUser = EDirTestSupport.userObjectClass();
+
+        if (!midPointReachable()) {
+            throw new SkipException("midPoint at " + baseUrl + " is not reachable");
+        }
+        if (!EDirTestSupport.edirReachable()) {
+            throw new SkipException("eDirectory at " + EDirTestSupport.property(EDirTestSupport.PROPERTY_HOST)
+                    + " is not reachable");
+        }
 
         connector = EDirTestSupport.createConnectorFacade();
+        // Reachable, so anything wrong from here on is configuration and must fail, not skip.
+        connector.test();
+    }
+
+    /**
+     * Only a transport-level failure counts as unreachable, so a midPoint that answers and
+     * rejects — a wrong password, say — still fails the tests loudly rather than being
+     * quietly skipped. Mirrors {@link EDirTestSupport#edirReachable}.
+     */
+    private boolean midPointReachable() {
+        try {
+            http.send(requestBuilder("/ws/rest/connectors").GET().build(), HttpResponse.BodyHandlers.discarding());
+            return true;
+        } catch (IOException e) {
+            return false;
+        } catch (InterruptedException e) {
+            Thread.currentThread().interrupt();
+            throw new IllegalStateException("Interrupted probing " + baseUrl, e);
+        }
     }
 
     /**
@@ -189,9 +225,9 @@ public class TestMidPointIntegration {
     /** Imports the resource and asks midPoint to test it, which reaches eDirectory. */
     @Test
     public void test100ImportResourceAndTestConnection() throws Exception {
-        put("/ws/rest/resources/" + RESOURCE_OID, resourceXml());
+        put("/ws/rest/resources/" + resourceOid, resourceXml());
 
-        String result = post("/ws/rest/resources/" + RESOURCE_OID + "/test", null);
+        String result = post("/ws/rest/resources/" + resourceOid + "/test", null);
 
         String status = firstValueOf(result, "status");
         AssertJUnit.assertEquals("Resource test did not succeed: " + result, "success", status);
@@ -206,7 +242,7 @@ public class TestMidPointIntegration {
         // Left in the tree afterwards, like everything else the tests create, so the
         // resulting shadow can be inspected in midPoint.
         String cn = EDirTestSupport.testName("midpoint");
-        String dn = "cn=" + cn + ",ou=users," + System.getProperty(EDirTestSupport.PROPERTY_BASE_CONTEXT);
+        String dn = "cn=" + cn + "," + EDirTestSupport.usersContainer();
         createFixtureUser(cn, dn);
 
         String query = """
@@ -221,7 +257,7 @@ public class TestMidPointIntegration {
                     </q:and>
                   </q:filter>
                 </q:query>
-                """.formatted(RESOURCE_OID);
+                """.formatted(resourceOid);
 
         String shadows = post("/ws/rest/shadows/search", query);
 
@@ -237,7 +273,7 @@ public class TestMidPointIntegration {
         attributes.add(AttributeBuilder.build(Name.NAME, dn));
         attributes.add(AttributeBuilder.build("cn", cn));
         attributes.add(AttributeBuilder.build("sn", cn));
-        connector.create(OC_USER, attributes, null);
+        connector.create(ocUser, attributes, null);
     }
 
     private String resourceXml() throws IOException {
@@ -247,19 +283,20 @@ public class TestMidPointIntegration {
             template = new String(in.readAllBytes(), StandardCharsets.UTF_8);
         }
         return template
-                .replace("${oid}", RESOURCE_OID)
+                .replace("${oid}", resourceOid)
                 .replace("${bundle}", EXPECTED_BUNDLE)
-                .replace("${host}", property(PROPERTY_RESOURCE_HOST, EDirTestSupport.PROPERTY_HOST))
-                .replace("${port}", property(PROPERTY_RESOURCE_PORT, EDirTestSupport.PROPERTY_PORT))
-                .replace("${connectionSecurity}", System.getProperty(EDirTestSupport.PROPERTY_CONNECTION_SECURITY))
-                .replace("${bindDn}", System.getProperty(EDirTestSupport.PROPERTY_BIND_DN))
-                .replace("${bindPassword}", System.getProperty(EDirTestSupport.PROPERTY_BIND_PASSWORD))
-                .replace("${baseContext}", System.getProperty(EDirTestSupport.PROPERTY_BASE_CONTEXT));
+                .replace("${host}", propertyOrSetting(PROPERTY_RESOURCE_HOST, EDirTestSupport.PROPERTY_HOST))
+                .replace("${port}", propertyOrSetting(PROPERTY_RESOURCE_PORT, EDirTestSupport.PROPERTY_PORT))
+                .replace("${connectionSecurity}", EDirTestSupport.property(EDirTestSupport.PROPERTY_CONNECTION_SECURITY))
+                .replace("${bindDn}", EDirTestSupport.property(EDirTestSupport.PROPERTY_BIND_DN))
+                .replace("${bindPassword}", EDirTestSupport.property(EDirTestSupport.PROPERTY_BIND_PASSWORD))
+                .replace("${baseContext}", EDirTestSupport.baseContext());
     }
 
     /** Value of {@code name}, falling back to {@code fallbackName} when it is not set. */
-    private static String property(String name, String fallbackName) {
-        return System.getProperty(name, System.getProperty(fallbackName));
+    /** Value of {@code name}, falling back to the value of a different setting. */
+    private static String propertyOrSetting(String name, String fallbackName) {
+        return EDirTestSupport.property(name, EDirTestSupport.property(fallbackName));
     }
 
     private String get(String path) throws Exception {

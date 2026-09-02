@@ -45,37 +45,24 @@ import org.testng.annotations.Test;
 import com.evolveum.polygon.connector.ldap.edirectory.EDirectoryLdapConfiguration;
 
 /**
- * Integration tests for the eDirectory connector, run directly against ConnId
- * (no midPoint involved). Requires a live eDirectory; see docker/README.md for
- * the test rig.
+ * Integration tests for the eDirectory connector, run directly against ConnId with no
+ * midPoint involved.
  *
- * The tests skip themselves when the connection properties are absent, so a
- * plain `mvn test` stays green without a rig:
+ * <p>Needs a live eDirectory, configured through {@code test.properties} on the test
+ * classpath — copy {@code test.properties.example} and edit it. The defaults describe the
+ * docker rig (see docker/README.md), but any eDirectory will do. The tests skip themselves
+ * when that file is absent or the server cannot be reached, so a plain {@code mvn test}
+ * stays green without one.
  *
- * <pre>
- * mvn test -Dtest.edir.host=127.0.0.1 \
- *          -Dtest.edir.port=20636 \
- *          -Dtest.edir.connectionSecurity=ssl \
- *          -Dtest.edir.bindDn='cn=admin,ou=sa,o=system' \
- *          -Dtest.edir.bindPassword=... \
- *          -Dtest.edir.baseContext=o=data
- * </pre>
- *
- * Each test creates and removes the objects it needs, so they do not depend on
- * execution order and can be run individually.
+ * <p>Each test creates the objects it needs, so they do not depend on execution order and
+ * can be run individually. They are left behind for inspection and removed at the start of
+ * the next run.
  */
 public class TestEDirectory {
 
-    /**
-     * ConnId object class names are the LDAP object class names
-     * ({@code AbstractSchemaTranslator.toIcfObjectClassType}), and these two are the
-     * defaults in {@link EDirectoryLdapConfiguration}.
-     */
-    private static final ObjectClass OC_USER = new ObjectClass("inetOrgPerson");
-    private static final ObjectClass OC_GROUP = new ObjectClass("groupOfNames");
-
-    /** Strong enough not to trip an eDirectory password policy. */
-    private static final String TEST_PASSWORD = "Qwe.123.Rty.456";
+    private ObjectClass ocUser;
+    private ObjectClass ocGroup;
+    private String testPassword;
 
     private ConnectorFacade connector;
     private String usersContainer;
@@ -91,17 +78,26 @@ public class TestEDirectory {
         String[] missingProperties = EDirTestSupport.missingProperties(EDirTestSupport.PROPERTIES);
         if (missingProperties.length != 0) {
             throw new SkipException(
-                    "Missing properties for eDirectory connection configuration: " + Arrays.toString(missingProperties));
+                    "Missing settings for the eDirectory connection: " + Arrays.toString(missingProperties)
+                            + " - copy test.properties.example to test.properties to run these tests");
         }
 
-        String baseContext = System.getProperty(EDirTestSupport.PROPERTY_BASE_CONTEXT);
-        usersContainer = "ou=users," + baseContext;
-        groupsContainer = "ou=groups," + baseContext;
+        ocUser = EDirTestSupport.userObjectClass();
+        ocGroup = EDirTestSupport.groupObjectClass();
+        testPassword = EDirTestSupport.testPassword();
+        usersContainer = EDirTestSupport.usersContainer();
+        groupsContainer = EDirTestSupport.groupsContainer();
+
+        if (!EDirTestSupport.edirReachable()) {
+            throw new SkipException("eDirectory at " + EDirTestSupport.property(EDirTestSupport.PROPERTY_HOST)
+                    + " is not reachable");
+        }
 
         connector = EDirTestSupport.createConnectorFacade();
+        // Reachable, so anything wrong from here on is configuration and must fail, not skip.
         connector.test();
 
-        EDirTestSupport.purgePreviousRuns(connector, OC_GROUP, OC_USER);
+        EDirTestSupport.purgePreviousRuns(connector);
     }
 
     /**
@@ -115,8 +111,8 @@ public class TestEDirectory {
         Schema schema = connector.schema();
         AssertJUnit.assertNotNull("No schema returned", schema);
 
-        ObjectClassInfo userOci = findObjectClassInfo(schema, OC_USER);
-        AssertJUnit.assertNotNull("No object class info for " + OC_USER, userOci);
+        ObjectClassInfo userOci = findObjectClassInfo(schema, ocUser);
+        AssertJUnit.assertNotNull("No object class info for " + ocUser, userOci);
 
         for (ObjectClassInfo oci : schema.getObjectClassInfo()) {
             for (AttributeInfo ai : oci.getAttributeInfo()) {
@@ -134,12 +130,12 @@ public class TestEDirectory {
      */
     @Test
     public void test010OperationalAttributesInSchema() {
-        ObjectClassInfo userOci = findObjectClassInfo(connector.schema(), OC_USER);
+        ObjectClassInfo userOci = findObjectClassInfo(connector.schema(), ocUser);
         AssertJUnit.assertNotNull(userOci);
 
-        AssertJUnit.assertNotNull("__ENABLE__ missing from " + OC_USER,
+        AssertJUnit.assertNotNull("__ENABLE__ missing from " + ocUser,
                 findAttributeInfo(userOci, OperationalAttributes.ENABLE_NAME));
-        AssertJUnit.assertNotNull("__LOCK_OUT__ missing from " + OC_USER,
+        AssertJUnit.assertNotNull("__LOCK_OUT__ missing from " + ocUser,
                 findAttributeInfo(userOci, OperationalAttributes.LOCK_OUT_NAME));
 
         AssertJUnit.assertNull("loginDisabled should be hidden, it is exposed as __ENABLE__",
@@ -157,7 +153,7 @@ public class TestEDirectory {
     public void test020ExtendConnectorObject() {
         Uid uid = createUser("extend");
 
-        ConnectorObject object = connector.getObject(OC_USER, uid, null);
+        ConnectorObject object = connector.getObject(ocUser, uid, null);
         AssertJUnit.assertNotNull(object);
 
         assertSingleValue(object, OperationalAttributes.ENABLE_NAME, Boolean.TRUE);
@@ -170,7 +166,7 @@ public class TestEDirectory {
         AssertJUnit.assertNotNull(uid);
         AssertJUnit.assertNotNull(uid.getUidValue());
 
-        ConnectorObject object = connector.getObject(OC_USER, uid, null);
+        ConnectorObject object = connector.getObject(ocUser, uid, null);
         AssertJUnit.assertNotNull("Created account cannot be read back", object);
         AssertJUnit.assertEquals(uid, object.getUid());
     }
@@ -184,7 +180,7 @@ public class TestEDirectory {
     public void test110SearchByUid() {
         Uid uid = createUser("byuid");
 
-        List<ConnectorObject> results = search(OC_USER, new EqualsFilter(uid));
+        List<ConnectorObject> results = search(ocUser, new EqualsFilter(uid));
 
         AssertJUnit.assertEquals("Wrong number of results searching by __UID__", 1, results.size());
         AssertJUnit.assertEquals(uid, results.get(0).getUid());
@@ -197,7 +193,7 @@ public class TestEDirectory {
         String dn = "cn=" + cn + "," + usersContainer;
         createUserWithCn(cn);
 
-        List<ConnectorObject> results = search(OC_USER, new EqualsFilter(AttributeBuilder.build(Name.NAME, dn)));
+        List<ConnectorObject> results = search(ocUser, new EqualsFilter(AttributeBuilder.build(Name.NAME, dn)));
 
         AssertJUnit.assertEquals("Wrong number of results searching by __NAME__", 1, results.size());
         AssertJUnit.assertEquals(dn, results.get(0).getName().getNameValue());
@@ -207,11 +203,11 @@ public class TestEDirectory {
     public void test130ModifyAttribute() {
         Uid uid = createUser("modify");
 
-        connector.updateDelta(OC_USER, uid,
+        connector.updateDelta(ocUser, uid,
                 Set.of(AttributeDeltaBuilder.build("title", "Chief Testing Officer")),
                 null);
 
-        ConnectorObject object = connector.getObject(OC_USER, uid, null);
+        ConnectorObject object = connector.getObject(ocUser, uid, null);
         assertSingleValue(object, "title", "Chief Testing Officer");
     }
 
@@ -223,15 +219,15 @@ public class TestEDirectory {
     public void test140DisableAndEnable() {
         Uid uid = createUser("disable");
 
-        connector.updateDelta(OC_USER, uid,
+        connector.updateDelta(ocUser, uid,
                 Set.of(AttributeDeltaBuilder.build(OperationalAttributes.ENABLE_NAME, Boolean.FALSE)),
                 null);
-        assertSingleValue(connector.getObject(OC_USER, uid, null), OperationalAttributes.ENABLE_NAME, Boolean.FALSE);
+        assertSingleValue(connector.getObject(ocUser, uid, null), OperationalAttributes.ENABLE_NAME, Boolean.FALSE);
 
-        connector.updateDelta(OC_USER, uid,
+        connector.updateDelta(ocUser, uid,
                 Set.of(AttributeDeltaBuilder.build(OperationalAttributes.ENABLE_NAME, Boolean.TRUE)),
                 null);
-        assertSingleValue(connector.getObject(OC_USER, uid, null), OperationalAttributes.ENABLE_NAME, Boolean.TRUE);
+        assertSingleValue(connector.getObject(ocUser, uid, null), OperationalAttributes.ENABLE_NAME, Boolean.TRUE);
     }
 
     /**
@@ -242,10 +238,10 @@ public class TestEDirectory {
     public void test150Unlock() {
         Uid uid = createUser("unlock");
 
-        connector.updateDelta(OC_USER, uid,
+        connector.updateDelta(ocUser, uid,
                 Set.of(AttributeDeltaBuilder.build(OperationalAttributes.LOCK_OUT_NAME, Boolean.FALSE)),
                 null);
-        assertSingleValue(connector.getObject(OC_USER, uid, null), OperationalAttributes.LOCK_OUT_NAME, Boolean.FALSE);
+        assertSingleValue(connector.getObject(ocUser, uid, null), OperationalAttributes.LOCK_OUT_NAME, Boolean.FALSE);
     }
 
     @Test
@@ -253,7 +249,7 @@ public class TestEDirectory {
         Uid uid = createUser("lock");
 
         try {
-            connector.updateDelta(OC_USER, uid,
+            connector.updateDelta(ocUser, uid,
                     Set.of(AttributeDeltaBuilder.build(OperationalAttributes.LOCK_OUT_NAME, Boolean.TRUE)),
                     null);
             AssertJUnit.fail("Locking an account should be rejected, but it succeeded");
@@ -276,15 +272,15 @@ public class TestEDirectory {
     public void test160GroupMembership() {
         Uid initialMemberUid = createUser("initial-member");
         Uid userUid = createUser("member");
-        String userDn = dnOf(OC_USER, userUid);
-        Uid groupUid = createGroup("grp", dnOf(OC_USER, initialMemberUid));
-        String groupDn = dnOf(OC_GROUP, groupUid);
+        String userDn = dnOf(ocUser, userUid);
+        Uid groupUid = createGroup("grp", dnOf(ocUser, initialMemberUid));
+        String groupDn = dnOf(ocGroup, groupUid);
 
-        connector.updateDelta(OC_GROUP, groupUid,
+        connector.updateDelta(ocGroup, groupUid,
                 Set.of(AttributeDeltaBuilder.build("member", List.of(userDn), List.of())),
                 null);
 
-        ConnectorObject user = connector.getObject(OC_USER, userUid, null);
+        ConnectorObject user = connector.getObject(ocUser, userUid, null);
         Attribute groupMembership = user.getAttributeByName("groupMembership");
         AssertJUnit.assertNotNull("groupMembership not set on the member", groupMembership);
         AssertJUnit.assertTrue(
@@ -297,24 +293,24 @@ public class TestEDirectory {
         String cn = uniqueName("passwd");
         Set<Attribute> attributes = userAttributes(cn);
         attributes.add(AttributeBuilder.build(OperationalAttributes.PASSWORD_NAME,
-                new GuardedString(TEST_PASSWORD.toCharArray())));
+                new GuardedString(testPassword.toCharArray())));
 
-        Uid uid = connector.create(OC_USER, attributes, null);
+        Uid uid = connector.create(ocUser, attributes, null);
 
         AssertJUnit.assertNotNull("Account with a password could not be created", uid);
-        AssertJUnit.assertNotNull(connector.getObject(OC_USER, uid, null));
+        AssertJUnit.assertNotNull(connector.getObject(ocUser, uid, null));
     }
 
     /** modifyTimestamp-based sync: a token taken before a create has to yield that create. */
     @Test
     public void test200Sync() {
-        SyncToken token = connector.getLatestSyncToken(OC_USER);
+        SyncToken token = connector.getLatestSyncToken(ocUser);
         AssertJUnit.assertNotNull("No sync token returned", token);
 
         Uid uid = createUser("sync");
 
         List<SyncDelta> deltas = new ArrayList<>();
-        connector.sync(OC_USER, token, delta -> {
+        connector.sync(ocUser, token, delta -> {
             deltas.add(delta);
             return true;
         }, null);
@@ -327,10 +323,10 @@ public class TestEDirectory {
     public void test900Delete() {
         Uid uid = createUser("delete");
 
-        connector.delete(OC_USER, uid, null);
+        connector.delete(ocUser, uid, null);
 
         AssertJUnit.assertTrue("Account still found after delete",
-                search(OC_USER, new EqualsFilter(uid)).isEmpty());
+                search(ocUser, new EqualsFilter(uid)).isEmpty());
     }
 
     // ----------------------------------------------------------------- helpers
@@ -340,7 +336,7 @@ public class TestEDirectory {
     }
 
     private Uid createUserWithCn(String cn) {
-        return connector.create(OC_USER, userAttributes(cn), null);
+        return connector.create(ocUser, userAttributes(cn), null);
     }
 
     private Set<Attribute> userAttributes(String cn) {
@@ -359,7 +355,7 @@ public class TestEDirectory {
         attributes.add(AttributeBuilder.build("cn", cn));
         attributes.add(AttributeBuilder.build("member", memberDn));
 
-        return connector.create(OC_GROUP, attributes, null);
+        return connector.create(ocGroup, attributes, null);
     }
 
     private String dnOf(ObjectClass objectClass, Uid uid) {
