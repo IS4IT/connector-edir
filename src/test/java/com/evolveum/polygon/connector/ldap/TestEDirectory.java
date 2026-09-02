@@ -231,6 +231,58 @@ public class TestEDirectory {
     }
 
     /**
+     * A search on __ENABLE__ has to agree with what {@code getObject} reports for the same account,
+     * in all three states loginDisabled can be in. eDirectory only materialises the attribute once
+     * it has been set, so "enabled" covers both an absent loginDisabled and an explicit FALSE, and
+     * a filter must match both.
+     *
+     * <p>Each search is asserted in both directions, with an account that must be in the result and
+     * an account that must not. A one-sided assertion here would hold even if the search returned
+     * nothing at all.
+     */
+    @Test
+    public void test145EnableFilterAgreesWithRead() {
+        // Never disabled: loginDisabled does not exist on this entry.
+        Uid neverDisabled = createUser("enabledfilter-absent");
+        // Explicitly disabled: loginDisabled=TRUE.
+        Uid disabledUid = createUser("enabledfilter-disabled");
+        connector.updateDelta(ocUser, disabledUid,
+                Set.of(AttributeDeltaBuilder.build(OperationalAttributes.ENABLE_NAME, Boolean.FALSE)), null);
+        // Disabled then re-enabled: loginDisabled=FALSE, the other enabled state.
+        Uid reEnabled = createUser("enabledfilter-false");
+        connector.updateDelta(ocUser, reEnabled,
+                Set.of(AttributeDeltaBuilder.build(OperationalAttributes.ENABLE_NAME, Boolean.FALSE)), null);
+        connector.updateDelta(ocUser, reEnabled,
+                Set.of(AttributeDeltaBuilder.build(OperationalAttributes.ENABLE_NAME, Boolean.TRUE)), null);
+
+        assertSingleValue(connector.getObject(ocUser, neverDisabled, null), OperationalAttributes.ENABLE_NAME, Boolean.TRUE);
+        assertSingleValue(connector.getObject(ocUser, disabledUid, null), OperationalAttributes.ENABLE_NAME, Boolean.FALSE);
+        assertSingleValue(connector.getObject(ocUser, reEnabled, null), OperationalAttributes.ENABLE_NAME, Boolean.TRUE);
+
+        List<ConnectorObject> enabled = search(ocUser,
+                new EqualsFilter(AttributeBuilder.build(OperationalAttributes.ENABLE_NAME, Boolean.TRUE)));
+        AssertJUnit.assertTrue("An account that was never disabled must be found among enabled accounts",
+                containsUid(enabled, neverDisabled));
+        AssertJUnit.assertTrue("An account re-enabled to loginDisabled=FALSE must be found among enabled accounts",
+                containsUid(enabled, reEnabled));
+        AssertJUnit.assertFalse("A disabled account must not be found among enabled accounts",
+                containsUid(enabled, disabledUid));
+
+        List<ConnectorObject> disabled = search(ocUser,
+                new EqualsFilter(AttributeBuilder.build(OperationalAttributes.ENABLE_NAME, Boolean.FALSE)));
+        AssertJUnit.assertTrue("A disabled account must be found among disabled accounts",
+                containsUid(disabled, disabledUid));
+        AssertJUnit.assertFalse("An account that was never disabled must not be found among disabled accounts",
+                containsUid(disabled, neverDisabled));
+        AssertJUnit.assertFalse("An account re-enabled to loginDisabled=FALSE must not be found among disabled accounts",
+                containsUid(disabled, reEnabled));
+    }
+
+    private static boolean containsUid(List<ConnectorObject> objects, Uid uid) {
+        return objects.stream().anyMatch(object -> uid.equals(object.getUid()));
+    }
+
+    /**
      * Unlocking clears lockedByIntruder and loginIntruderResetTime. Locking is
      * deliberately not supported — eDirectory sets the lock itself on failed binds.
      */
