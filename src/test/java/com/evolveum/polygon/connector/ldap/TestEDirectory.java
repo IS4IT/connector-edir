@@ -198,7 +198,10 @@ public class TestEDirectory {
         List<ConnectorObject> results = search(ocUser, new EqualsFilter(AttributeBuilder.build(Name.NAME, dn)));
 
         AssertJUnit.assertEquals("Wrong number of results searching by __NAME__", 1, results.size());
-        AssertJUnit.assertEquals(dn, results.get(0).getName().getNameValue());
+        // Compare as DNs. The server may return a different but equivalent spelling of the
+        // container — "OU=Users,O=Data" for "ou=users,o=data" — and a string comparison would
+        // fail on that cosmetic difference rather than on anything the test is about.
+        AssertJUnit.assertEquals(LdapUtil.asDn(dn), LdapUtil.asDn(results.get(0).getName().getNameValue()));
     }
 
     @Test
