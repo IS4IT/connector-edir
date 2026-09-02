@@ -15,6 +15,7 @@
  */
 package com.evolveum.polygon.connector.ldap.edirectory;
 
+import java.util.Arrays;
 import java.util.List;
 
 import org.apache.directory.api.ldap.model.entry.Entry;
@@ -26,6 +27,7 @@ import org.identityconnectors.common.logging.Log;
 import org.identityconnectors.framework.common.objects.AttributeInfoBuilder;
 import org.identityconnectors.framework.common.objects.ConnectorObjectBuilder;
 import org.identityconnectors.framework.common.objects.ObjectClassInfoBuilder;
+import org.identityconnectors.framework.common.objects.OperationOptions;
 import org.identityconnectors.framework.common.objects.OperationalAttributes;
 
 import com.evolveum.polygon.connector.ldap.LdapUtil;
@@ -179,6 +181,25 @@ public class EDirectorySchemaTranslator extends AbstractSchemaTranslator<EDirect
 		return super.toConnIdType(syntax, icfAttributeName);
 	}
 	
+	/**
+	 * __LOCK_OUT__ is derived from two attributes, but ConnId only knows the one
+	 * {@link #toLdapAttribute} maps it to. When the caller supplies an explicit
+	 * attributesToGet — which MidPoint always does — loginIntruderResetTime would not be
+	 * requested, and {@link #extendConnectorObject} would then read every locked account as
+	 * unlocked. Ask for it whenever the object class can carry a lock.
+	 */
+	@Override
+	public String[] determineAttributesToGet(org.apache.directory.api.ldap.model.schema.ObjectClass ldapObjectClass,
+			OperationOptions options, String... additionalAttributes) {
+		if (!isUserObjectClass(ldapObjectClass)) {
+			return super.determineAttributesToGet(ldapObjectClass, options, additionalAttributes);
+		}
+		String[] extended = Arrays.copyOf(additionalAttributes, additionalAttributes.length + 2);
+		extended[additionalAttributes.length] = EDirectoryConstants.ATTRIBUTE_LOCKOUT_LOCKED_NAME;
+		extended[additionalAttributes.length + 1] = EDirectoryConstants.ATTRIBUTE_LOCKOUT_RESET_TIME_NAME;
+		return super.determineAttributesToGet(ldapObjectClass, options, extended);
+	}
+
 	/**
 	 * Must list every syntax {@link #toConnIdType} declares as {@code byte[]}. The write path keys
 	 * off this method, so a syntax that is byte[] on read but missing here is stored as the result

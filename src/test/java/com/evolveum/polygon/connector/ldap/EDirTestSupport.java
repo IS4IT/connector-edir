@@ -26,7 +26,15 @@ import java.util.Properties;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 
+import org.apache.directory.api.ldap.model.entry.DefaultModification;
+import org.apache.directory.api.ldap.model.entry.ModificationOperation;
+import org.apache.directory.api.ldap.model.exception.LdapException;
 import org.apache.directory.api.ldap.model.name.Dn;
+import org.apache.directory.ldap.client.api.LdapConnectionConfig;
+import org.apache.directory.ldap.client.api.LdapNetworkConnection;
+import org.apache.directory.ldap.client.api.NoVerificationTrustManager;
+
+import com.evolveum.polygon.connector.ldap.edirectory.EDirectoryConstants;
 
 import org.identityconnectors.common.logging.Log;
 import org.identityconnectors.common.security.GuardedString;
@@ -279,6 +287,36 @@ final class EDirTestSupport {
         Matcher matcher = TEST_OBJECT_RDN.matcher(parsed.getRdn().getName());
         // Only ours, and only from a run that is not this one.
         return matcher.matches() && !RUN_ID.equals(matcher.group(1));
+    }
+
+    /**
+     * Locks an account the way eDirectory's intruder detection would, by writing
+     * lockedByIntruder and a future loginIntruderResetTime directly.
+     *
+     * <p>Goes around the connector on purpose: it hides both attributes behind __LOCK_OUT__
+     * ({@code shouldTranslateAttribute}) and refuses to set the lock, so there is no way to
+     * arrange this state through the connector itself — and a test for unlocking is worthless
+     * unless something was actually locked first.
+     */
+    static void lockAccount(String dn) {
+        LdapConnectionConfig config = new LdapConnectionConfig();
+        config.setLdapHost(property(PROPERTY_HOST));
+        config.setLdapPort(Integer.parseInt(property(PROPERTY_PORT)));
+        config.setUseSsl("ssl".equalsIgnoreCase(property(PROPERTY_CONNECTION_SECURITY)));
+        config.setTrustManagers(new NoVerificationTrustManager());
+        config.setName(property(PROPERTY_BIND_DN));
+        config.setCredentials(property(PROPERTY_BIND_PASSWORD));
+
+        try (LdapNetworkConnection connection = new LdapNetworkConnection(config)) {
+            connection.bind();
+            connection.modify(dn, new DefaultModification(ModificationOperation.REPLACE_ATTRIBUTE,
+                            EDirectoryConstants.ATTRIBUTE_LOCKOUT_LOCKED_NAME, AbstractLdapConfiguration.BOOLEAN_TRUE),
+                    new DefaultModification(ModificationOperation.REPLACE_ATTRIBUTE,
+                            EDirectoryConstants.ATTRIBUTE_LOCKOUT_RESET_TIME_NAME,
+                            LdapUtil.toGeneralizedTime(System.currentTimeMillis() + 3600_000L, false)));
+        } catch (LdapException e) {
+            throw new IllegalStateException("Cannot lock " + dn, e);
+        }
     }
 
     static ConnectorFacade createConnectorFacade() {

@@ -31,6 +31,8 @@ import org.identityconnectors.framework.common.objects.ConnectorObject;
 import org.identityconnectors.framework.common.objects.Name;
 import org.identityconnectors.framework.common.objects.ObjectClass;
 import org.identityconnectors.framework.common.objects.ObjectClassInfo;
+import org.identityconnectors.framework.common.objects.OperationOptions;
+import org.identityconnectors.framework.common.objects.OperationOptionsBuilder;
 import org.identityconnectors.framework.common.objects.OperationalAttributes;
 import org.identityconnectors.framework.common.objects.Schema;
 import org.identityconnectors.framework.common.objects.SyncDelta;
@@ -289,11 +291,26 @@ public class TestEDirectory {
     @Test
     public void test150Unlock() {
         Uid uid = createUser("unlock");
+        String dn = dnOf(ocUser, uid);
+
+        // Lock it outside the connector; asserting on an account that was never locked would hold
+        // whether or not unlocking works.
+        EDirTestSupport.lockAccount(dn);
+
+        // Read the way MidPoint does, with an explicit attributesToGet rather than everything:
+        // that is the path where __LOCK_OUT__ has to resolve the attributes it is derived from.
+        OperationOptions withLockOut = new OperationOptionsBuilder()
+                .setAttributesToGet(OperationalAttributes.LOCK_OUT_NAME, Name.NAME)
+                .build();
+        assertSingleValue(connector.getObject(ocUser, uid, withLockOut),
+                OperationalAttributes.LOCK_OUT_NAME, Boolean.TRUE);
 
         connector.updateDelta(ocUser, uid,
                 Set.of(AttributeDeltaBuilder.build(OperationalAttributes.LOCK_OUT_NAME, Boolean.FALSE)),
                 null);
-        assertSingleValue(connector.getObject(ocUser, uid, null), OperationalAttributes.LOCK_OUT_NAME, Boolean.FALSE);
+
+        assertSingleValue(connector.getObject(ocUser, uid, withLockOut),
+                OperationalAttributes.LOCK_OUT_NAME, Boolean.FALSE);
     }
 
     @Test
