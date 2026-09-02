@@ -183,9 +183,16 @@ public class EDirectorySchemaTranslator extends AbstractSchemaTranslator<EDirect
 		return super.toConnIdType(syntax, icfAttributeName);
 	}
 	
+	/**
+	 * Must list every syntax {@link #toConnIdType} declares as {@code byte[]}. The write path keys
+	 * off this method, so a syntax that is byte[] on read but missing here is stored as the result
+	 * of {@code toString()} on the array — the literal text "[B@1f2a3b".
+	 */
 	@Override
 	protected boolean isBinarySyntax(String syntaxOid) {
 		return EDirectoryConstants.OID_NOVELL_SYNTAX_NETADDRESS.equals(syntaxOid) ||
+				EDirectoryConstants.OID_NOVELL_SYNTAX_OCTET_LIST.equals(syntaxOid) ||
+				EDirectoryConstants.OID_NOVELL_SYNTAX_REPLICA_POINTER.equals(syntaxOid) ||
 				super.isBinarySyntax(syntaxOid);
 	}
 	
