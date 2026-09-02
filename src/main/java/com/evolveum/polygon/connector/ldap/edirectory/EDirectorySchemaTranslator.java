@@ -90,28 +90,24 @@ public class EDirectorySchemaTranslator extends AbstractSchemaTranslator<EDirect
 	protected void extendConnectorObject(ConnectorObjectBuilder cob, Entry entry,
 			org.apache.directory.api.ldap.model.schema.ObjectClass ldapObjectClass) {
 		super.extendConnectorObject(cob, entry, ldapObjectClass);
+		// extendObjectClassDefinition declares __ENABLE__ and __LOCK_OUT__ for user object classes
+		// only, so attaching them to anything else produces attributes that are not in the object
+		// class definition -- which MidPoint drops or rejects.
+		if (!isUserObjectClass(ldapObjectClass)) {
+			return;
+		}
 		Boolean ldapDisabled = LdapUtil.getBooleanAttribute(entry, EDirectoryConstants.ATTRIBUTE_LOGIN_DISABLED_NAME, null);
 		if (ldapDisabled == null) {
-			if (isUserObjectClass(ldapObjectClass)) {
-				cob.addAttribute(OperationalAttributes.ENABLE_NAME, Boolean.TRUE);
-			}
+			cob.addAttribute(OperationalAttributes.ENABLE_NAME, Boolean.TRUE);
 		} else {
-			if (ldapDisabled) {
-				cob.addAttribute(OperationalAttributes.ENABLE_NAME, Boolean.FALSE);
-			} else {
-				cob.addAttribute(OperationalAttributes.ENABLE_NAME, Boolean.TRUE);
-			}
+			cob.addAttribute(OperationalAttributes.ENABLE_NAME, !ldapDisabled);
 		}
 		boolean ldapLocked = LdapUtil.getBooleanAttribute(entry, EDirectoryConstants.ATTRIBUTE_LOCKOUT_LOCKED_NAME, Boolean.FALSE);
 		if (ldapLocked) {
 			Long resetTime = LdapUtil.getTimestampAttribute(entry, EDirectoryConstants.ATTRIBUTE_LOCKOUT_RESET_TIME_NAME);
 			long now = System.currentTimeMillis();
 			LOG.ok("LOCK reset={0}, now={1}", resetTime, now);
-			if (resetTime!=null && resetTime > now) {
-				cob.addAttribute(OperationalAttributes.LOCK_OUT_NAME, Boolean.TRUE);
-			} else {
-				cob.addAttribute(OperationalAttributes.LOCK_OUT_NAME, Boolean.FALSE);
-			}
+			cob.addAttribute(OperationalAttributes.LOCK_OUT_NAME, resetTime != null && resetTime > now);
 		} else {
 			cob.addAttribute(OperationalAttributes.LOCK_OUT_NAME, Boolean.FALSE);
 		}
