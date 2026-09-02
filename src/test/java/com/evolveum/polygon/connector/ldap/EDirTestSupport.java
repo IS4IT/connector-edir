@@ -23,6 +23,10 @@ import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.List;
 import java.util.Properties;
+import java.util.regex.Matcher;
+import java.util.regex.Pattern;
+
+import org.apache.directory.api.ldap.model.name.Dn;
 
 import org.identityconnectors.common.logging.Log;
 import org.identityconnectors.common.security.GuardedString;
@@ -236,13 +240,13 @@ final class EDirTestSupport {
             return true;
         }, options);
 
-        String containerSuffix = "," + containerDn.toLowerCase();
+        Dn container = LdapUtil.asDn(containerDn);
         for (ConnectorObject object : objects) {
             String dn = object.getName().getNameValue();
             if (!isFromPreviousRun(dn)) {
                 continue;
             }
-            if (!dn.toLowerCase().endsWith(containerSuffix)) {
+            if (!LdapUtil.isDescendantOf(LdapUtil.asDn(dn), container)) {
                 // Belt and braces: the search should not have returned this at all.
                 LOG.warn("Refusing to delete {0}: it is not inside {1}", dn, containerDn);
                 continue;
@@ -256,9 +260,25 @@ final class EDirTestSupport {
         }
     }
 
-    private static boolean isFromPreviousRun(String dn) {
-        String lower = dn.toLowerCase();
-        return lower.startsWith("cn=" + TEST_OBJECT_PREFIX) && !lower.contains(RUN_ID);
+    /**
+     * Matches only the exact shape {@link #testName} generates — {@code test-<purpose>-<epoch millis>}
+     * as the whole first RDN. A bare {@code cn=test-} prefix test would also match objects a real
+     * directory happens to contain, such as {@code cn=test-account-migration}, and delete them.
+     */
+    private static final Pattern TEST_OBJECT_RDN =
+            Pattern.compile("^cn=" + Pattern.quote(TEST_OBJECT_PREFIX) + "[a-z0-9-]+-(\\d{13})$",
+                    Pattern.CASE_INSENSITIVE);
+
+    // Package-private so TestEDirTestSupport can cover it directly; this is the check that
+    // decides what gets deleted.
+    static boolean isFromPreviousRun(String dn) {
+        Dn parsed = LdapUtil.asDn(dn);
+        if (parsed.isEmpty()) {
+            return false;
+        }
+        Matcher matcher = TEST_OBJECT_RDN.matcher(parsed.getRdn().getName());
+        // Only ours, and only from a run that is not this one.
+        return matcher.matches() && !RUN_ID.equals(matcher.group(1));
     }
 
     static ConnectorFacade createConnectorFacade() {
