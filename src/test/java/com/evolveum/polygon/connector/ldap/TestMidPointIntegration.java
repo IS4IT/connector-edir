@@ -268,6 +268,10 @@ public class TestMidPointIntegration {
         String dn = "cn=" + cn + "," + EDirTestSupport.usersContainer();
         createFixtureUser(cn, dn);
 
+        // Built from the configured object class, not hardcoded: the fixture account above is
+        // created with it, so a tree using a derived user class would otherwise be searched for
+        // one object class and populated with another, and fail as a shadow-not-found with
+        // nothing pointing at the cause.
         String query = """
                 <q:query xmlns:q="http://prism.evolveum.com/xml/ns/public/query-3">
                   <q:filter>
@@ -275,12 +279,12 @@ public class TestMidPointIntegration {
                       <q:ref><q:path>resourceRef</q:path><q:value oid="%s"/></q:ref>
                       <q:equal><q:path>objectClass</q:path>
                         <q:value xmlns:ri="http://midpoint.evolveum.com/xml/ns/public/resource/instance-3"\
-                        >ri:inetOrgPerson</q:value>
+                        >ri:%s</q:value>
                       </q:equal>
                     </q:and>
                   </q:filter>
                 </q:query>
-                """.formatted(resourceOid);
+                """.formatted(resourceOid, xml(ocUser.getObjectClassValue()));
 
         String shadows = post("/ws/rest/shadows/search", query);
 

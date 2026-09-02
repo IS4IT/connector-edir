@@ -8,7 +8,7 @@ In this branch, the generic LDAP connector and the AD connector are removed, so 
 To use this connector to a MidPoint instance
 
 * build the project in IntelliJ IDEA using the Maven "package" target
-* copy `target/connector-edir-<version>.jar` to `/opt/midpoint/var/icf-connectors` on the MidPoint server and/or `/connid-connector-server/bundles/` on the ConnID Java Connector Server
+* copy `target/connector-edir-<version>.jar` to `/opt/midpoint/var/icf-connectors` on the MidPoint server and/or `/connid-connector-server/bundles/` on the ConnID Java Connector Server — that jar only, **not** the `-sources` jar `maven-source-plugin` leaves beside it, which ConnID tries to parse as a bundle and fails on at startup
 * restart the MidPoint Server and/or ConnID Java Connector Server
 
 There is a Docker test rig with eDirectory and MidPoint under `docker/`; see `docker/README.md`.
@@ -38,9 +38,21 @@ resource:
    from
    `.../icf-1/bundle/com.evolveum.polygon.connector-ldap/com.evolveum.polygon.connector.ldap.edirectory.EDirectoryLdapConnector`
    to the same URL with `connector-edir` in place of `connector-ldap`.
-4. If a resource's `connectorRef` filter matches on `connectorType` alone, add
+4. **Strip the `oid` attribute from each `connectorRef`.** MidPoint stores the OID it
+   resolved the reference to, and step 2 gave the connector a new one, so a resource
+   carrying the old OID no longer finds its connector. Exporting and re-importing does not
+   fix this by itself — the export contains the stale `oid` alongside the filter. Removing
+   the attribute lets the filter in step 5 resolve it again.
+5. If a resource's `connectorRef` filter matches on `connectorType` alone, add
    `connectorBundle` to it. Both Evolveum's connector and this one can now be deployed
    together, so `connectorType` on its own is no longer unambiguous.
+
+### Other properties this fork renamed
+
+Independently of the bundle rename, this fork renamed the configuration property `timeout`
+to `globalTimeout` (per-server `timeout=` inside the `servers` property is unchanged). A
+resource carrying the old name fails on an unknown configuration property, so rename it in
+the same pass.
 
 Export the affected resources, rewrite them, re-import, and try it on a non-production
 instance first.

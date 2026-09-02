@@ -9,15 +9,21 @@ the connector bundle is discovered and a resource can be configured against it.
 - Access to the private registry holding the eDirectory image: `docker login hub.is4it.de`.
   The image is licensed — do not push derived images from this repository.
 - The image is **linux/amd64 only**. On Apple Silicon it runs under emulation, and the
-  first boot has to create the tree, which takes a while. The healthcheck allows 30
-  minutes before calling the container unhealthy.
+  first boot has to create the tree, which takes a while. The healthcheck allows 40
+  minutes before calling the container unhealthy, and `docker/rig init` waits an hour.
 
 ## Setup
 
 ```bash
 cp docker/.env.example docker/.env
-$EDITOR docker/.env          # at minimum set EDIR_PASSWORD and MP_ADMIN_PASSWORD
+$EDITOR docker/.env          # works unedited against this rig
 ```
+
+If you do change `EDIR_PASSWORD` or `MP_ADMIN_PASSWORD`, change the matching
+`test.edir.bindPassword` and `test.midpoint.password` in
+`src/test/resources/test.properties` too — `test.properties.example` ships the values from
+`.env.example`, and the live suites fail rather than skip when a reachable server rejects
+the credentials.
 
 Keep `EDIR_PASSWORD` alphanumeric. The image's `/startidm.sh` configures itself by
 dumping the container environment with `env > file` and then `source`ing that file, so a
@@ -35,6 +41,7 @@ same problems for the full IDM stack.
 
 ```bash
 docker/rig init      # bring up, wait for the tree, seed o=data  (~10 min first time)
+docker/rig seed      # re-create o=data on its own
 docker/rig deploy    # build the connector and load it into midPoint
 docker/rig status    # what is running, and how to reach it
 docker/rig stop      # stop containers, keeping the tree
@@ -71,10 +78,14 @@ and the test configuration agree.
 docker/rig deploy
 ```
 
-That packages the connector, copies it into `/opt/midpoint/var/icf-connectors/` and
-restarts midPoint. It deliberately skips `connector-*-sources.jar`, which
-`maven-source-plugin` also produces and which ConnId would try to parse as a connector
-bundle and fail on at startup.
+That runs `mvn clean package`, removes every `connector-*.jar` already staged in
+`/opt/midpoint/var/icf-connectors/`, copies the new bundle in and restarts midPoint. Both
+destructive steps are deliberate — `clean` so a rename cannot leave two jars in `target/`,
+the `rm` so a previous bundle name cannot linger — but note that the `rm` removes *any*
+other connector bundle you may have staged in that midPoint by hand.
+
+It skips `connector-*-sources.jar`, which `maven-source-plugin` also produces and which
+ConnId would try to parse as a connector bundle and fail on at startup.
 
 ## No bind mounts
 
@@ -95,8 +106,10 @@ Consequences worth knowing:
 - **Plaintext LDAP does not work, by design.** The image ends its setup with
   `ldapconfig set "Require TLS for Simple Binds with Password=yes"`, so simple binds on
   the plaintext port are refused. Tests use `connectionSecurity=ssl` against the LDAPS
-  port with `allowUntrustedSsl=true`, which is this connector's default and exercises the
-  SSL path as a side effect. Do not "fix" this by flipping the setting back.
+  port. The rig's certificate is self-signed, so the tests and the resource template set
+  `allowUntrustedSsl=true` explicitly — it is *not* the connector's default, which is
+  `false`. Do not "fix" the plaintext port by flipping the TLS-for-simple-binds setting
+  back.
 - **Shut down cleanly.** `stop_grace_period` is 300s; killing eDirectory early can damage
   the DIB.
 
@@ -104,8 +117,11 @@ Consequences worth knowing:
 
 Test data is kept on purpose so a run can be inspected afterwards, in eDirectory and in
 midPoint. Nothing is deleted at the end of a run; leftovers are removed at the *start* of
-the next one. Objects are named `test-<purpose>-<runId>`, and the purge removes any
-`cn=test-*` under `o=data` that does not carry the current run's id.
+the next one. Objects are named `test-<purpose>-<runId>`, and the purge is deliberately
+narrow: only the two configured containers, only the two configured object classes, only
+names matching exactly that generated shape, and each candidate's DN is re-checked against
+its container before anything is deleted. An object of your own that merely starts with
+`test-` is left alone.
 
 So after `mvn test` you can browse `o=data` over LDAPS or iMonitor, and look at the
 resource, its shadows and the connector in the midPoint GUI. The midPoint resource has a
