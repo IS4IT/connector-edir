@@ -945,7 +945,10 @@ public abstract class AbstractLdapConfiguration extends AbstractConfiguration {
         this.useTreeDelete = useTreeDelete;
     }
 
-    @ConfigurationProperty(order = 37, allowedValues = { SYNCHRONIZATION_STRATEGY_NONE, SYNCHRONIZATION_STRATEGY_AUTO, SYNCHRONIZATION_STRATEGY_SUN_CHANGE_LOG, SYNCHRONIZATION_STRATEGY_OPEN_LDAP_ACCESSLOG, SYNCHRONIZATION_STRATEGY_MODIFY_TIMESTAMP, SYNCHRONIZATION_STRATEGY_AD_DIR_SYNC })
+    // Only the strategies this fork still implements. Offering sunChangeLog, openLdapAccessLog or
+    // adDirSync here would put them in MidPoint's dropdown, and chooseSyncStrategy throws
+    // IllegalArgumentException for all three — a live sync task that fails on its first run.
+    @ConfigurationProperty(order = 37, allowedValues = { SYNCHRONIZATION_STRATEGY_NONE, SYNCHRONIZATION_STRATEGY_AUTO, SYNCHRONIZATION_STRATEGY_MODIFY_TIMESTAMP })
     public String getSynchronizationStrategy() {
         return synchronizationStrategy;
     }
