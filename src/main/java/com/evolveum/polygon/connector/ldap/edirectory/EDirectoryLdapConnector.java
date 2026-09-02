@@ -38,6 +38,7 @@ import org.identityconnectors.framework.common.objects.*;
 import org.identityconnectors.framework.spi.ConnectorClass;
 
 import java.util.*;
+import java.util.stream.Collectors;
 
 @ConnectorClass(displayNameKey = "connector.ldap.edirectory.display", configurationClass = EDirectoryLdapConfiguration.class)
 public class EDirectoryLdapConnector extends AbstractLdapConnector<EDirectoryLdapConfiguration> {
@@ -170,13 +171,24 @@ public class EDirectoryLdapConnector extends AbstractLdapConnector<EDirectoryLda
 	 */
 	@Override
 	protected RuntimeException processCreateResult(String dn, AddResponse addResponse) {
-		if (addResponse.getLdapResult().getResultCode() == ResultCodeEnum.CONSTRAINT_VIOLATION &&
-				addResponse.getLdapResult().getDiagnosticMessage().contains("password")) {
-			LOG.error("Password constraint violation when creating LDAP entry {0}: {1}", dn, addResponse.getLdapResult().getDiagnosticMessage());
-			return new InvalidAttributeValueException("Error adding LDAP entry " + dn + ": " + addResponse.getLdapResult().getDiagnosticMessage());
+		String diagnostic = addResponse.getLdapResult().getDiagnosticMessage();
+		if (addResponse.getLdapResult().getResultCode() == ResultCodeEnum.CONSTRAINT_VIOLATION
+				&& indicatesPasswordConstraint(diagnostic)) {
+			LOG.error("Password constraint violation when creating LDAP entry {0}: {1}", dn, diagnostic);
+			return new InvalidAttributeValueException("Error adding LDAP entry " + dn + ": " + diagnostic);
 		}
-		LOG.info("LDAP entry created successfully for DN {0}, result code: {1}", dn, addResponse.getLdapResult().getResultCode());
+		LOG.info("Add of LDAP entry {0} failed, result code: {1}", dn, addResponse.getLdapResult().getResultCode());
 		return super.processCreateResult(dn, addResponse);
+	}
+
+	/**
+	 * eDirectory reports password policy rejections as a constraint violation with the reason in
+	 * the diagnostic message. The message is optional in the protocol and its wording and case
+	 * vary between versions and locales, so match defensively: a null here previously threw an NPE
+	 * that hid the real LDAP error.
+	 */
+	private boolean indicatesPasswordConstraint(String diagnosticMessage) {
+		return diagnosticMessage != null && diagnosticMessage.toLowerCase(Locale.ROOT).contains("password");
 	}
 	
 	/**
@@ -190,13 +202,27 @@ public class EDirectoryLdapConnector extends AbstractLdapConnector<EDirectoryLda
 	 */
 	@Override
 	protected RuntimeException processModifyResult(Dn dn, List<Modification> modifications, ModifyResponse modifyResponse) {
-		if (modifyResponse.getLdapResult().getResultCode() == ResultCodeEnum.CONSTRAINT_VIOLATION &&
-				modifyResponse.getLdapResult().getDiagnosticMessage().contains("password")) {
-			LOG.error("Password constraint violation when modifying LDAP entry {0}, modifications: {1}, message: {2}", dn, dumpModifications(modifications), modifyResponse.getLdapResult().getDiagnosticMessage());
-			return new InvalidAttributeValueException("Error modifying LDAP entry " + dn + ": " + dumpModifications(modifications) + ": " + modifyResponse.getLdapResult().getDiagnosticMessage());
+		String diagnostic = modifyResponse.getLdapResult().getDiagnosticMessage();
+		if (modifyResponse.getLdapResult().getResultCode() == ResultCodeEnum.CONSTRAINT_VIOLATION
+				&& indicatesPasswordConstraint(diagnostic)) {
+			LOG.error("Password constraint violation when modifying LDAP entry {0}, modifications: {1}, message: {2}",
+					dn, dumpModifications(modifications), diagnostic);
+			// Attribute names only. MidPoint stores this message in the shadow's operation result
+			// and renders it in the GUI and audit trail, and the values have been decrypted by now.
+			return new InvalidAttributeValueException("Error modifying LDAP entry " + dn + " ("
+					+ modifiedAttributeNames(modifications) + "): " + diagnostic);
 		}
-		LOG.info("LDAP entry modified successfully for DN {0}, result code: {1}", dn, modifyResponse.getLdapResult().getResultCode());
+		LOG.info("Modify of LDAP entry {0} failed, result code: {1}", dn, modifyResponse.getLdapResult().getResultCode());
 		return super.processModifyResult(dn, modifications, modifyResponse);
+	}
+
+	private String modifiedAttributeNames(List<Modification> modifications) {
+		if (modifications == null) {
+			return "";
+		}
+		return modifications.stream()
+				.map(modification -> modification.getAttribute() == null ? "?" : modification.getAttribute().getId())
+				.collect(Collectors.joining(", "));
 	}
 	
 	/**
@@ -210,8 +236,9 @@ public class EDirectoryLdapConnector extends AbstractLdapConnector<EDirectoryLda
 	 */
 	@Override
 	protected RuntimeException processModifyResult(String dn, List<Modification> modifications, LdapException e) {
-		if ((e instanceof LdapInvalidAttributeValueException) && 
-		((LdapInvalidAttributeValueException)e).getResultCode() == ResultCodeEnum.CONSTRAINT_VIOLATION && e.getMessage().contains("password")) {
+		if ((e instanceof LdapInvalidAttributeValueException)
+				&& ((LdapInvalidAttributeValueException) e).getResultCode() == ResultCodeEnum.CONSTRAINT_VIOLATION
+				&& indicatesPasswordConstraint(e.getMessage())) {
 			LOG.error("Password constraint violation exception when modifying LDAP entry {0}: {1}", dn, e.getMessage());
 			return new InvalidAttributeValueException("Error modifying LDAP entry " + dn + ": " + e.getMessage(), e);
 		}
