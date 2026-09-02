@@ -96,7 +96,7 @@ public abstract class AbstractLdapConfiguration extends AbstractConfiguration {
      * When set to false, connector checks server certificate validity in SSL/TLS mode (recommended).
      * When set to true, connector does not check server certificate validity. Do not use this option in the production.
      */
-    private boolean allowUntrustedSsl = true;
+    private boolean allowUntrustedSsl = false;
 
     /**
      * Set of security protocols that are acceptable for protocol negotiation.
