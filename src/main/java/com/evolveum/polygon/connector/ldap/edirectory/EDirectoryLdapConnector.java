@@ -118,7 +118,7 @@ public class EDirectoryLdapConnector extends AbstractLdapConnector<EDirectoryLda
 			modifications.add(
 					new DefaultModification(ModificationOperation.REPLACE_ATTRIBUTE, EDirectoryConstants.ATTRIBUTE_LOCKOUT_RESET_TIME_NAME)); // no value
 
-		} else if (getSchemaTranslator().isGroupObjectClass(ldapStructuralObjectClass.getName())) {
+		} else if (getSchemaTranslator().isGroupObjectClass(ldapStructuralObjectClass)) {
 			LOG.info("Processing group object class modification for DN {0}", dn);
 			// modification handles modification of ordinary attributes - and also modification of "member" itself
 			super.addAttributeModification(dn, modifications, ldapStructuralObjectClass, connIdObjectClass, delta);
@@ -241,7 +241,7 @@ public class EDirectoryLdapConnector extends AbstractLdapConnector<EDirectoryLda
 			LOG.info("Reciprocal group attributes management is disabled, skipping post-update");
 			return;
 		}
-		if (getSchemaTranslator().isGroupObjectClass(ldapStructuralObjectClass.getName())) {
+		if (getSchemaTranslator().isGroupObjectClass(ldapStructuralObjectClass)) {
 			LOG.info("Post-update processing group object class for DN {0}", dn);
 			for (AttributeDelta delta: deltas) {
 				if (delta.is(getConfiguration().getGroupObjectMemberAttribute())) {

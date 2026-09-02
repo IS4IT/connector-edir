@@ -15,6 +15,8 @@
  */
 package com.evolveum.polygon.connector.ldap.edirectory;
 
+import java.util.List;
+
 import org.apache.directory.api.ldap.model.entry.Entry;
 import org.apache.directory.api.ldap.model.entry.Value;
 import org.apache.directory.api.ldap.model.schema.AttributeType;
@@ -121,17 +123,36 @@ public class EDirectorySchemaTranslator extends AbstractSchemaTranslator<EDirect
 	 * user — so __ENABLE__ and __LOCK_OUT__ would never be attached to it.
 	 */
 	public boolean isUserObjectClass(org.apache.directory.api.ldap.model.schema.ObjectClass ldapObjectClass) {
-		if (ldapObjectClass == null) {
-			return false;
-		}
-		if (getConfiguration().getUserObjectClass().equals(ldapObjectClass.getName())) {
-			return true;
-		}
-		return ldapObjectClass.getSuperiors().stream().anyMatch(this::isUserObjectClass);
+		return matchesConfiguredClass(ldapObjectClass, getConfiguration().getUserObjectClass());
 	}
 
-	public boolean isGroupObjectClass(String ldapObjectClass) {
-		return getConfiguration().getGroupObjectClass().equals(ldapObjectClass);
+	/**
+	 * Same rule as {@link #isUserObjectClass}: a group class derived from the configured one is
+	 * still a group. Without this the reciprocal groupMembership and equivalentToMe writes are
+	 * skipped entirely and the membership stays one-sided.
+	 */
+	public boolean isGroupObjectClass(org.apache.directory.api.ldap.model.schema.ObjectClass ldapObjectClass) {
+		return matchesConfiguredClass(ldapObjectClass, getConfiguration().getGroupObjectClass());
+	}
+
+	/**
+	 * Compares case-insensitively, as the rest of the connector's object class resolution does by
+	 * going through the SchemaManager; an admin configuring "inetorgperson" should not silently
+	 * lose activation support.
+	 */
+	private boolean matchesConfiguredClass(
+			org.apache.directory.api.ldap.model.schema.ObjectClass ldapObjectClass, String configuredName) {
+		if (ldapObjectClass == null || configuredName == null) {
+			return false;
+		}
+		if (configuredName.equalsIgnoreCase(ldapObjectClass.getName())) {
+			return true;
+		}
+		List<org.apache.directory.api.ldap.model.schema.ObjectClass> superiors = ldapObjectClass.getSuperiors();
+		if (superiors == null) {
+			return false;
+		}
+		return superiors.stream().anyMatch(superior -> matchesConfiguredClass(superior, configuredName));
 	}
 	
 	// TODO: OID_NOVELL_SYNTAX_NDS_TIMESTAMP
