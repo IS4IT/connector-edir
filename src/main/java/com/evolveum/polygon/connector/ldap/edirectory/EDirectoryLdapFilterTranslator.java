@@ -53,7 +53,13 @@ public class EDirectoryLdapFilterTranslator extends LdapFilterTranslator<EDirect
 			}
 			Boolean value = (Boolean)values.get(0);
 			if (value) {
-				return new ScopedFilter(createLoginDisabledFilter(AbstractLdapConfiguration.BOOLEAN_FALSE));
+				// Only loginDisabled=TRUE means disabled. FALSE and absent are the same thing,
+				// which is what extendConnectorObject reports on read, so negating the disabled
+				// test covers both without enumerating them: an equality assertion against an
+				// attribute the entry does not carry is FALSE, not Undefined (RFC 4511 4.5.1.7),
+				// so the NOT matches those entries too.
+				return new ScopedFilter(
+						new NotNode(createLoginDisabledFilter(AbstractLdapConfiguration.BOOLEAN_TRUE)));
 			} else {
 				return new ScopedFilter(createLoginDisabledFilter(AbstractLdapConfiguration.BOOLEAN_TRUE));
 			}
