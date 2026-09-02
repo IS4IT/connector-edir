@@ -228,19 +228,19 @@ public class TestMidPointIntegration {
         String ourVersion = valueOf(connectors, CONNECTOR_TYPE, "connectorVersion");
         AssertJUnit.assertNotNull("Connector " + CONNECTOR_TYPE + " was not discovered", ourVersion);
 
-        List<String> types = allValuesOf(connectors, "connectorType");
-        List<String> bundles = allValuesOf(connectors, "connectorBundle");
-        List<String> versions = allValuesOf(connectors, "connectorVersion");
-        AssertJUnit.assertEquals("Malformed connector list", types.size(), bundles.size());
-        AssertJUnit.assertEquals("Malformed connector list", types.size(), versions.size());
-
-        for (int i = 0; i < types.size(); i++) {
-            if (EXPECTED_BUNDLE.equals(bundles.get(i)) && ourVersion.equals(versions.get(i))) {
+        // Read each connector as a whole object. Zipping three independent flat match lists by
+        // index breaks as soon as one entry is missing a field, and silently compares fields
+        // belonging to different connectors.
+        for (String object : connectorObjects(connectors)) {
+            String type = firstValueOf(object, "connectorType");
+            String bundle = firstValueOf(object, "connectorBundle");
+            String version = firstValueOf(object, "connectorVersion");
+            if (EXPECTED_BUNDLE.equals(bundle) && ourVersion.equals(version)) {
                 AssertJUnit.assertEquals(
-                        "Connector " + types.get(i) + " claims this jar's bundle identity ("
+                        "Connector " + type + " claims this jar's bundle identity ("
                                 + EXPECTED_BUNDLE + ":" + ourVersion + "). Another connector jar is "
                                 + "deployed under the same name and version; ConnId rejects that.",
-                        CONNECTOR_TYPE, types.get(i));
+                        CONNECTOR_TYPE, type);
             }
         }
     }
@@ -370,34 +370,68 @@ public class TestMidPointIntegration {
     }
 
     /**
-     * Reads a sibling field out of the JSON object that contains the given connectorType.
-     * A regex is enough here — midPoint's connector list is flat, and pulling in a JSON
-     * parser purely for the tests is not worth it.
+     * Every connector entry in the response, each as the text of its own JSON object.
+     *
+     * <p>Splitting by object matters: a fixed-size window around a match spans neighbouring
+     * entries — midPoint's are only a few hundred bytes each — so a field read that way comes
+     * from whichever connector the window happens to open in. Brace balancing ignores braces
+     * inside string values, which is safe here because none of these fields can contain one.
      */
-    private static String valueOf(String json, String connectorType, String field) {
-        int anchor = json.indexOf('"' + connectorType + '"');
-        if (anchor < 0) {
+    private static List<String> connectorObjects(String json) {
+        List<String> objects = new ArrayList<>();
+        Matcher matcher = fieldPattern("connectorType").matcher(json);
+        while (matcher.find()) {
+            String object = enclosingObject(json, matcher.start());
+            if (object != null) {
+                objects.add(object);
+            }
+        }
+        return objects;
+    }
+
+    /** The innermost {@code { ... }} containing {@code index}, or null if the JSON is unbalanced. */
+    private static String enclosingObject(String json, int index) {
+        int depth = 0;
+        int start = -1;
+        for (int i = index; i >= 0; i--) {
+            char c = json.charAt(i);
+            if (c == '}') {
+                depth++;
+            } else if (c == '{') {
+                if (depth == 0) {
+                    start = i;
+                    break;
+                }
+                depth--;
+            }
+        }
+        if (start < 0) {
             return null;
         }
-        // The fields of one connector are emitted together; search both directions from
-        // the connectorType so field order does not matter.
-        String window = json.substring(Math.max(0, anchor - 2000),
-                Math.min(json.length(), anchor + 2000));
-        return firstValueOf(window, field);
+        depth = 0;
+        for (int i = start; i < json.length(); i++) {
+            char c = json.charAt(i);
+            if (c == '{') {
+                depth++;
+            } else if (c == '}' && --depth == 0) {
+                return json.substring(start, i + 1);
+            }
+        }
+        return null;
+    }
+
+    /** Reads a field from the connector entry whose connectorType matches, or null if absent. */
+    private static String valueOf(String json, String connectorType, String field) {
+        return connectorObjects(json).stream()
+                .filter(object -> connectorType.equals(firstValueOf(object, "connectorType")))
+                .map(object -> firstValueOf(object, field))
+                .findFirst()
+                .orElse(null);
     }
 
     private static String firstValueOf(String json, String field) {
         Matcher m = fieldPattern(field).matcher(json);
         return m.find() ? m.group(1) : null;
-    }
-
-    private static List<String> allValuesOf(String json, String field) {
-        List<String> values = new ArrayList<>();
-        Matcher m = fieldPattern(field).matcher(json);
-        while (m.find()) {
-            values.add(m.group(1));
-        }
-        return values;
     }
 
     private static Pattern fieldPattern(String field) {
