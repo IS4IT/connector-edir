@@ -22,6 +22,7 @@ import java.net.http.HttpClient;
 import java.net.http.HttpRequest;
 import java.net.http.HttpResponse;
 import java.nio.charset.StandardCharsets;
+import java.time.Duration;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Base64;
@@ -32,12 +33,14 @@ import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 
 import org.identityconnectors.framework.api.ConnectorFacade;
+import org.identityconnectors.framework.api.ConnectorFacadeFactory;
 import org.identityconnectors.framework.common.objects.Attribute;
 import org.identityconnectors.framework.common.objects.AttributeBuilder;
 import org.identityconnectors.framework.common.objects.Name;
 import org.identityconnectors.framework.common.objects.ObjectClass;
 import org.testng.AssertJUnit;
 import org.testng.SkipException;
+import org.testng.annotations.AfterClass;
 import org.testng.annotations.BeforeClass;
 import org.testng.annotations.Test;
 
@@ -129,7 +132,9 @@ public class TestMidPointIntegration {
         authorization = "Basic " + Base64.getEncoder().encodeToString(
                 (EDirTestSupport.property(PROPERTY_USER) + ":" + EDirTestSupport.property(PROPERTY_PASSWORD))
                         .getBytes(StandardCharsets.UTF_8));
-        http = HttpClient.newHttpClient();
+        // Without a connect timeout a midPoint host that drops packets blocks the reachability
+        // probe for the OS TCP timeout -- around two minutes -- before deciding to skip.
+        http = HttpClient.newBuilder().connectTimeout(Duration.ofSeconds(5)).build();
         resourceOid = EDirTestSupport.property(PROPERTY_RESOURCE_OID, DEFAULT_RESOURCE_OID);
         ocUser = EDirTestSupport.userObjectClass();
 
@@ -144,6 +149,24 @@ public class TestMidPointIntegration {
         connector = EDirTestSupport.createConnectorFacade();
         // Reachable, so anything wrong from here on is configuration and must fail, not skip.
         connector.test();
+
+        // This suite creates accounts too. Without this, running it on its own — the normal way
+        // to iterate on it — accumulates them and their MidPoint shadows without bound, because
+        // the "next run cleans up" lifecycle lived only in TestEDirectory. The shared RUN_ID
+        // makes this safe when both suites run in one JVM.
+        EDirTestSupport.purgePreviousRuns(connector);
+    }
+
+    /**
+     * Releases the connector's sockets and MINA threads. Without it {@code dispose()} and the
+     * whole {@code ConnectionManager.close()} chain have no test coverage at all, and each suite
+     * leaves a bound eDirectory connection open for the rest of the surefire JVM.
+     */
+    @AfterClass(alwaysRun = true)
+    public void afterClass() {
+        if (connector != null) {
+            ConnectorFacadeFactory.getInstance().dispose();
+        }
     }
 
     /**
@@ -283,17 +306,24 @@ public class TestMidPointIntegration {
             template = new String(in.readAllBytes(), StandardCharsets.UTF_8);
         }
         return template
-                .replace("${oid}", resourceOid)
-                .replace("${bundle}", EXPECTED_BUNDLE)
-                .replace("${host}", propertyOrSetting(PROPERTY_RESOURCE_HOST, EDirTestSupport.PROPERTY_HOST))
-                .replace("${port}", propertyOrSetting(PROPERTY_RESOURCE_PORT, EDirTestSupport.PROPERTY_PORT))
-                .replace("${connectionSecurity}", EDirTestSupport.property(EDirTestSupport.PROPERTY_CONNECTION_SECURITY))
-                .replace("${bindDn}", EDirTestSupport.property(EDirTestSupport.PROPERTY_BIND_DN))
-                .replace("${bindPassword}", EDirTestSupport.property(EDirTestSupport.PROPERTY_BIND_PASSWORD))
-                .replace("${baseContext}", EDirTestSupport.baseContext());
+                .replace("${oid}", xml(resourceOid))
+                .replace("${bundle}", xml(EXPECTED_BUNDLE))
+                .replace("${host}", xml(propertyOrSetting(PROPERTY_RESOURCE_HOST, EDirTestSupport.PROPERTY_HOST)))
+                .replace("${port}", xml(propertyOrSetting(PROPERTY_RESOURCE_PORT, EDirTestSupport.PROPERTY_PORT)))
+                .replace("${connectionSecurity}", xml(EDirTestSupport.property(EDirTestSupport.PROPERTY_CONNECTION_SECURITY)))
+                .replace("${bindDn}", xml(EDirTestSupport.property(EDirTestSupport.PROPERTY_BIND_DN)))
+                .replace("${bindPassword}", xml(EDirTestSupport.property(EDirTestSupport.PROPERTY_BIND_PASSWORD)))
+                .replace("${baseContext}", xml(EDirTestSupport.baseContext()));
     }
 
-    /** Value of {@code name}, falling back to {@code fallbackName} when it is not set. */
+    /**
+     * A bind DN or password containing &amp;, &lt; or &gt; would otherwise produce malformed XML,
+     * and the PUT fails as an opaque HTTP 400 that names nothing.
+     */
+    private static String xml(String value) {
+        return value == null ? "" : value.replace("&", "&amp;").replace("<", "&lt;").replace(">", "&gt;");
+    }
+
     /** Value of {@code name}, falling back to the value of a different setting. */
     private static String propertyOrSetting(String name, String fallbackName) {
         return EDirTestSupport.property(name, EDirTestSupport.property(fallbackName));
@@ -324,6 +354,7 @@ public class TestMidPointIntegration {
 
     private HttpRequest.Builder requestBuilder(String path) {
         return HttpRequest.newBuilder(URI.create(baseUrl + path))
+                .timeout(Duration.ofSeconds(60))
                 .header("Authorization", authorization)
                 .header("Accept", "application/json");
     }

@@ -150,7 +150,14 @@ final class EDirTestSupport {
     /** Names of the settings that are not configured, sorted; empty when all are present. */
     static String[] missingProperties(String... properties) {
         return Arrays.stream(properties)
-                .filter(p -> property(p) == null)
+                // Blank counts as absent, as it does everywhere else here. A key present but
+                // empty otherwise passes the gate and fails later with something unhelpful --
+                // an empty port as NumberFormatException, an empty bindDn as an anonymous bind
+                // the server may well accept.
+                .filter(p -> {
+                    String value = property(p);
+                    return value == null || value.isBlank();
+                })
                 .sorted()
                 .toArray(String[]::new);
     }
